@@ -2,11 +2,13 @@
 
 module Foo::Bar
   class TestComponent[K, V] < ViewComponent::Base
+    private attr_reader foobars: Hash[String, String]
+
     prepend Boo
     include Bar
     extend Baz
 
-    def initialize(title: Array[Numeric], thing: Hash[K, String | Numeric]) -> nil
+    def initialize(title: Array[Numeric] = foo('title'.upcase), thing: Hash[K, String | Numeric]) -> nil
       @title = title
       @thing = thing
     end
@@ -14,7 +16,7 @@ module Foo::Bar
     def each(&block: Proc[[String, String], String]) -> nil
     end
 
-    def render -> String
+    private def render -> String
     end
   end
 end

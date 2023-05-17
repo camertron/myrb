@@ -1,12 +1,11 @@
 # frozen_string_literal: true
 
-require 'singleton'
-
 module Myrb
   class Constant < Annotation
-    attr_reader :tokens
+    attr_reader :loc, :tokens
 
-    def initialize(tokens)
+    def initialize(loc, tokens)
+      @loc = loc
       @tokens = tokens
     end
 
@@ -21,11 +20,12 @@ module Myrb
 
 
   class Type < Annotation
-    attr_reader :const, :args
+    attr_reader :const, :loc, :type_args
 
-    def initialize(const, *args)
+    def initialize(const, loc = nil, type_args = nil)
       @const = const
-      @args = args
+      @loc = loc
+      @type_args = type_args
     end
 
     def to_ruby
@@ -34,22 +34,19 @@ module Myrb
 
     def sig
       const.to_ruby.tap do |result|
-        unless args.empty?
-          result << "[#{args.map(&:sig).join(', ')}]"
-        end
+        result << type_args.sig unless type_args.empty?
       end
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       const.to_ruby.tap do |result|
-        unless args.empty?
-          result << "[#{args.map(&:inspect).join(', ')}]"
-        end
+        result << type_args.inspect unless type_args.empty?
       end
     end
 
     def has_args?
-      !args.empty?
+      type_args ? !type_args.empty? : false
     end
 
     def accept(visitor, level)
@@ -58,8 +55,41 @@ module Myrb
   end
 
 
+  class TypeArgs < Annotation
+    include Enumerable
+
+    attr_reader :loc, :args
+
+    def initialize(loc, args)
+      @loc = loc
+      @args = args
+    end
+
+    def empty?
+      args.empty?
+    end
+
+    def sig
+      "[#{args.map(&:sig).join(', ')}]"
+    end
+
+    def inspect(indent = 0)
+      return super() if Myrb.debug?
+      "[#{args.map(&:inspect).join(', ')}]"
+    end
+
+    def each(&block)
+      @args.each(&block)
+    end
+  end
+
+
   class NilType < Annotation
-    include Singleton
+    attr_reader :loc
+
+    def initialize(loc)
+      @loc = loc
+    end
 
     def accept(visitor, level)
       visitor.visit_nil_type(self, level)
@@ -72,7 +102,11 @@ module Myrb
 
 
   class UntypedType < Annotation
-    include Singleton
+    attr_reader :loc
+
+    def initialize(loc)
+      @loc = loc
+    end
 
     def accept(visitor, level)
       visitor.visit_untyped_type(self, level)
@@ -85,11 +119,19 @@ module Myrb
 
 
   class ProcType < Annotation
-    attr_reader :arg_types, :return_type
+    attr_reader :loc, :type_args
 
-    def initialize(arg_types, return_type)
-      @arg_types = arg_types
-      @return_type = return_type
+    def initialize(loc, type_args)
+      @loc = loc
+      @type_args = type_args
+    end
+
+    def arg_types
+      @arg_types ||= type_args.args[0..-2]
+    end
+
+    def return_type
+      type_args.args.last
     end
 
     def sig
@@ -113,6 +155,7 @@ module Myrb
     end
 
     def inspect
+      return super() if Myrb.debug?
       (+'{ (').tap do |result|
         result << arg_types.map(&:inspect).join(', ')
         result << ') -> '
@@ -134,10 +177,15 @@ module Myrb
 
 
   class ArrayType < Annotation
-    attr_reader :elem_type
+    attr_reader :loc, :type_args
 
-    def initialize(elem_type)
-      @elem_type = elem_type
+    def initialize(loc, type_args)
+      @loc = loc
+      @type_args = type_args
+    end
+
+    def elem_type
+      type_args.args.first
     end
 
     def sig
@@ -145,6 +193,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       "Array[#{elem_type.inspect}]"
     end
 
@@ -155,10 +204,15 @@ module Myrb
 
 
   class SetType < Annotation
-    attr_reader :elem_type
+    attr_reader :loc, :type_args
 
-    def initialize(elem_type)
-      @elem_type = elem_type
+    def initialize(loc, type_args)
+      @loc = loc
+      @type_args = type_args
+    end
+
+    def elem_type
+      type_args.args.first
     end
 
     def sig
@@ -166,6 +220,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       "Set[#{elem_type.inspect}]"
     end
 
@@ -176,11 +231,19 @@ module Myrb
 
 
   class HashType < Annotation
-    attr_reader :key_type, :value_type
+    attr_reader :loc, :type_args
 
-    def initialize(key_type, value_type)
-      @key_type = key_type
-      @value_type = value_type
+    def initialize(loc, type_args)
+      @loc = loc
+      @type_args = type_args
+    end
+
+    def key_type
+      type_args.args.first
+    end
+
+    def value_type
+      type_args.args.last
     end
 
     def sig
@@ -188,6 +251,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       "Hash[#{key_type.inspect}, #{value_type.inspect}]"
     end
 
@@ -198,10 +262,15 @@ module Myrb
 
 
   class RangeType < Annotation
-    attr_reader :elem_type
+    attr_reader :loc, :type_args
 
-    def initialize(elem_type)
-      @elem_type = elem_type
+    def initialize(type_args)
+      @loc = loc
+      @type_args = type_args
+    end
+
+    def elem_type
+      type_args.first
     end
 
     def sig
@@ -209,6 +278,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       "Range[#{elem_type.inspect}]"
     end
 
@@ -219,10 +289,15 @@ module Myrb
 
 
   class EnumerableType < Annotation
-    attr_reader :elem_type
+    attr_reader :loc, :type_args
 
-    def initialize(elem_type)
-      @elem_type = elem_type
+    def initialize(loc, type_args)
+      @loc = loc
+      @type_args = type_args
+    end
+
+    def elem_type
+      type_args.first
     end
 
     def sig
@@ -230,6 +305,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       "Enumerable[#{elem_type.inspect}]"
     end
 
@@ -240,10 +316,15 @@ module Myrb
 
 
   class EnumeratorType < Annotation
-    attr_reader :elem_type
+    attr_reader :loc, :type_args
 
-    def initialize(elem_type)
-      @elem_type = elem_type
+    def initialize(loc, type_args)
+      @loc = loc
+      @type_args = type_args
+    end
+
+    def elem_type
+      type_args.first
     end
 
     def sig
@@ -251,6 +332,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       "Enumerator[#{elem_type.inspect}]"
     end
 
@@ -261,10 +343,15 @@ module Myrb
 
 
   class ClassOf < Annotation
-    attr_reader :type
+    attr_reader :loc, :type_args
 
-    def initialize(type)
-      @type = type
+    def initialize(loc, type_args)
+      @loc = loc
+      @type_args = type_args
+    end
+
+    def type
+      type_args.first
     end
 
     def sig
@@ -272,6 +359,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       "ClassOf(#{type.inspect})"
     end
 
@@ -282,11 +370,18 @@ module Myrb
 
 
   class SelfType
+    attr_reader :loc
+
+    def initialize(loc)
+      @loc = loc
+    end
+
     def sig
       'T.self_type'
     end
 
     def inspect
+      return super() if Myrb.debug?
       'SelfType'
     end
 

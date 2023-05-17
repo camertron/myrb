@@ -3,10 +3,17 @@
 module Myrb
   class Lexer < LexerInterface
     class UnexpectedTokenError < StandardError; end
+    class CouldNotParseArgDefaultValueError < StandardError; end
 
     include Annotations
 
     attr_reader :source_buffer, :context
+
+    attr_accessor :parser
+
+    VISIBILITY_METHODS = %w(private public protected).freeze
+    MIXIN_METHODS = %w(include extend prepend).freeze
+    ATTR_METHODS = %w(attr_reader attr_writer attr_accessor).freeze
 
     def initialize(source_buffer, init_pos, context)
       super()
@@ -51,6 +58,10 @@ module Myrb
       @current
     end
 
+    def prev
+      @prev
+    end
+
     def current_scope
       @scope_stack.last
     end
@@ -92,11 +103,11 @@ module Myrb
           ident = text_of(current)
 
           case ident
-            when 'private', 'public'
+            when *VISIBILITY_METHODS, *ATTR_METHODS
               if ivar = maybe_handle_ivar(block)
                 current_scope.ivars << ivar
               end
-            when 'include', 'extend', 'prepend'
+            when *MIXIN_METHODS
               consume(:tIDENTIFIER, block)
               const = handle_constant(block)
               current_scope.mixins << [ident.to_sym, const]
@@ -111,50 +122,94 @@ module Myrb
 
     def maybe_handle_ivar(block)
       modifiers = [current]
-      consume(:tIDENTIFIER)
+      consume(type_of(current))
 
-      while type_of(current) == :tIDENTIFIER
-        modifiers << current
-        consume(:tIDENTIFIER)
-      end
-
-      if type_of(current) != :tIVAR
-        modifiers.each { |mod| block.call(mod) }
+      # this isn't an attr_*, so bail out
+      if type_of(current) != :tIDENTIFIER && type_of(current) != :tLABEL
+        block.call(modifiers[0])
         return nil
       end
 
+      until attr_method?(prev)
+        modifiers << current
+        consume(:tIDENTIFIER, block)
+      end
+
+      # current can either be a label or an identifier
       ivar_token = current
       name = text_of(current)
-      consume(:tIVAR)
-      consume(:tCOLON)
+      consume(type_of(current))
       type = handle_types
 
-      modifiers.each do |modifier|
-        case text_of(modifier)
-          when 'attr_reader', 'attr_writer', 'attr_accessor'
-            block.call(modifier)
-        end
+      fabricate_and_yield(
+        block, [
+          [:tSYMBOL, [text_of(ivar_token)]]
+        ]
+      )
+
+      loc = {
+        expression: pos_of(modifiers.first).with(end_pos: pos_of(prev).end_pos),
+        label: pos_of(ivar_token)
+      }
+
+      IVar.new(name, type, modifiers.map { |m| text_of(m) }, loc)
+    end
+
+    # def maybe_handle_ivar(block)
+    #   modifiers = [current]
+    #   consume(:tIDENTIFIER)
+
+    #   while type_of(current) == :tIDENTIFIER
+    #     modifiers << current
+    #     consume(:tIDENTIFIER)
+    #   end
+
+    #   if type_of(current) != :tIVAR
+    #     modifiers.each { |mod| block.call(mod) }
+    #     return nil
+    #   end
+
+    #   ivar_token = current
+    #   name = text_of(current)
+    #   consume(:tIVAR)
+    #   consume(:tCOLON)
+    #   type = handle_types
+
+    #   modifiers.each do |modifier|
+    #     case text_of(modifier)
+    #       when 'attr_reader', 'attr_writer', 'attr_accessor'
+    #         block.call(modifier)
+    #     end
+    #   end
+
+    #   ivar = IVar.new(name, type, modifiers.map { |m| text_of(m) })
+
+    #   if ivar.attr?
+    #     block.call([:tSYMBOL, [ivar.bare_name, pos_of(ivar_token)]])
+    #   end
+
+    #   ivar.attrs.each do |attr|
+    #     if attr.private?
+    #       fabricate_and_yield(block, [
+    #         [:tNL, nil],
+    #         [:tIDENTIFIER, 'private'],
+    #         [:tLPAREN2, '('],
+    #         [:tSYMBOL, attr.method_str],
+    #         [:tRPAREN, ')']
+    #       ])
+    #     end
+    #   end
+
+    #   ivar
+    # end
+
+    def attr_method?(token)
+      case text_of(token)
+        when *ATTR_METHODS
+          true
+        else
+          false
       end
-
-      ivar = IVar.new(name, type, modifiers.map { |m| text_of(m) })
-
-      if ivar.attr?
-        block.call([:tSYMBOL, [ivar.bare_name, pos_of(ivar_token)]])
-      end
-
-      ivar.attrs.each do |attr|
-        if attr.private?
-          fabricate_and_yield(block, [
-            [:tNL, nil],
-            [:tIDENTIFIER, 'private'],
-            [:tLPAREN2, '('],
-            [:tSYMBOL, attr.method_str],
-            [:tRPAREN, ')']
-          ])
-        end
-      end
-
-      ivar
     end
 
     def handle_class(block)
@@ -185,6 +240,8 @@ module Myrb
     end
 
     def handle_def(block)
+      start_token = current
+
       consume(:kDEF, block)
       method_name = text_of(current)
       # The method name is usually a tIDENTIFIER but can be almost anything, including
@@ -198,12 +255,26 @@ module Myrb
         args = handle_args(block)
       end
 
+      loc = {}
+
       return_type = if type_of(current) == :tLAMBDA
+        return_type_start_token = current
         consume(:tLAMBDA)
-        handle_types
+
+        handle_types.tap do
+          loc[:return_type] = pos_of(return_type_start_token).with(
+            end_pos: pos_of(prev).end_pos
+          )
+        end
+      else
+        Type.new(:untyped, nil)
       end
 
-      MethodDef.new(method_name, Args.new(args), return_type)
+      loc[:expression] = pos_of(start_token).with(
+        end_pos: pos_of(prev).end_pos
+      )
+
+      MethodDef.new(method_name, Args.new(args), return_type, loc)
     end
 
     def handle_args(block)
@@ -226,32 +297,20 @@ module Myrb
       end
     end
 
-    def handle_expression
-      parens = curlies = brackets = 0
+    def handle_arg_default_value(block)
+      result = ExpressionParser.parse(@source_buffer, pos_of(current).begin_pos)
+
+      unless result
+        pos = pos_of(current)
+        raise CouldNotParseArgDefaultValueError, "the arg default on line #{pos.line} column #{pos.column} could not be parsed"
+      end
 
       [].tap do |tokens|
         loop do
-          case type_of(current)
-            when :tLPAREN2
-              parens += 1
-            when :tRPAREN
-              parens -= 1
-            when :tLCURLY
-              curlies += 1
-            when :tRCURLY
-              curlies -= 1
-            when :tLBRACK
-              brackets += 1
-            when :tRBRACK
-              brackets -= 1
-            when :tNL
-              # TODO: handle line continuations using \
-              if parens == 0 && curlies == 0 && brackets == 0
-                break
-              end
-          end
+          break if pos_of(current).end_pos > result.loc.expression.end_pos
 
           tokens << current
+          consume(type_of(current), block)
         end
       end
     end
@@ -266,11 +325,17 @@ module Myrb
 
       label = current
       arg_name = text_of(label)
+      loc = {}
 
       arg_type = case type_of(current)
         when :tLABEL
+          loc[:colon] = pos_of(current).with(
+            begin_pos: pos_of(current).end_pos - 1
+          )
+
           consume(:tLABEL)
           block.call([:tIDENTIFIER, [arg_name, pos_of(label)]])
+
           handle_type
         when :tIDENTIFIER
           consume(:tIDENTIFIER, block)
@@ -280,16 +345,25 @@ module Myrb
       end
 
       default_value = if type_of(current) == :tEQL
-        handle_expression
+        loc[:default_equals] = pos_of(current)
+        consume(:tEQL, block)
+
+        handle_arg_default_value(block).tap do
+          loc[:default_expression] = loc[:default_equals].with(
+            begin_pos: loc[:default_equals].end_pos,
+            end_pos: pos_of(prev).end_pos
+          )
+        end
       else
         []
       end
 
-      Arg.new(arg_name, arg_type, block_arg, default_value)
+      Arg.new(arg_name, arg_type, block_arg, default_value, loc)
     end
 
     def handle_types
       wrapped_in_parens = false
+      start_token = current
 
       if type_of(current) == :tLPAREN2
         consume(:tLPAREN2)
@@ -314,27 +388,39 @@ module Myrb
 
       consume(:tRPAREN) if wrapped_in_parens
 
+      stop_token = prev
+
       # TODO: handle intersection types as well, maybe joined with a + or & char?
       if types.size > 1
-        UnionType.new(types)
+        loc = {
+          expression: join_ranges(
+            pos_of(start_token),
+            pos_of(stop_token)
+          )
+        }
+
+        UnionType.new(types, loc)
       elsif types.size == 1
         types.first
       else
-        Type.new(:untyped)
+        Type.new(:untyped, nil)
       end
     end
 
     def handle_type
       if type_of(current) == :kNIL
-        consume(:kNIL)
-        return NilType.instance
+        return NilType.new(pos_of(current)).tap do
+          consume(:kNIL)
+        end
       end
 
       if type_of(current) == :tIDENTIFIER && text_of(current) == 'untyped'
-        consume(:tIDENTIFIER)
-        return UntypedType.instance
+        return UntypedType.new(pos_of(current)).tap do
+          consume(:tIDENTIFIER)
+        end
       end
 
+      start_token = current
       const = handle_constant
       return nil unless const
 
@@ -355,25 +441,58 @@ module Myrb
         consume(:tRBRACK)
       end
 
-      Annotations.get_type(const, *type_args)
+      stop_token = prev
+
+      arg_loc = {
+        expression: type_args.empty? ? nil : const.loc[:expression].with(
+          begin_pos: const.loc[:expression].end_pos,
+          end_pos: pos_of(stop_token).end_pos
+        )
+      }
+
+      type_args = TypeArgs.new(arg_loc, type_args)
+
+      Annotations.get_type(
+        const,
+        type_args, {
+          constant: pos_of(start_token),
+          expression: join_ranges(
+            pos_of(start_token),
+            pos_of(stop_token)
+          )
+        }
+      )
     end
 
     def handle_type_list
+      start_token = current
       consume(:tLBRACK)
 
-      TypeList.new(
-        [].tap do |type_list|
-          until type_of(current) == :tRBRACK
-            if type_list.size > 0
-              consume(:tCOMMA)
-            end
-
-            type_list << handle_type
+      types = [].tap do |type_list|
+        until type_of(current) == :tRBRACK
+          if type_list.size > 0
+            consume(:tCOMMA)
           end
 
-          consume(:tRBRACK)
+          type_list << handle_type
         end
-      )
+
+        consume(:tRBRACK)
+      end
+
+      stop_token = prev
+
+      loc = {
+        expression: join_ranges(pos_of(start_token), pos_of(stop_token)),
+        open_bracket: pos_of(start_token),
+        close_bracket: pos_of(stop_token),
+        types: join_ranges(
+          types.first.loc[:expression],
+          types.last.loc[:expression]
+        )
+      }
+
+      TypeList.new(types, loc)
     end
 
     def handle_constant(block = nil)
@@ -390,7 +509,14 @@ module Myrb
         end
       end
 
-      Constant.new(tokens)
+      loc = {
+        expression: join_ranges(
+          pos_of(tokens.first),
+          pos_of(tokens.last)
+        )
+      }
+
+      Constant.new(loc, tokens)
     end
 
     def join(tokens)
@@ -402,8 +528,8 @@ module Myrb
     end
 
     def fabricate_and_yield(block, tokens)
-      tokens.each do |(type, text)|
-        block.call([type, [text, make_range(0, 0)]])
+      tokens.each do |(type, (text, loc))|
+        block.call([type, [text, loc || make_range(0, 0)]])
       end
     end
 
@@ -426,6 +552,7 @@ module Myrb
       end
 
       block.call(current) if block
+      @prev = current
       @current = get_next
     end
 
@@ -457,6 +584,10 @@ module Myrb
 
     def make_range(start, stop)
       ::Parser::Source::Range.new(@lexer.source_buffer, start, stop)
+    end
+
+    def join_ranges(begin_range, end_range)
+      begin_range.with(end_pos: end_range.end_pos)
     end
   end
 end

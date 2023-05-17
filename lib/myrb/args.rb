@@ -31,6 +31,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       args.map { |arg| arg.inspect(indent) }.join(', ')
     end
   end

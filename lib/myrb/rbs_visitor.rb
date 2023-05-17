@@ -14,7 +14,7 @@ module Myrb
       ''.tap do |result|
         type_args = if node.type.has_args?
           '['.tap do |ta|
-            node.type.args.map do |type_arg|
+            node.type.type_args.map do |type_arg|
               ta << "#{visit(type_arg.const, level)}"
             end
 

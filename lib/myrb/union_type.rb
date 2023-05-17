@@ -2,10 +2,11 @@
 
 module Myrb
   class UnionType < Annotation
-    attr_reader :types
+    attr_reader :types, :loc
 
-    def initialize(types)
+    def initialize(types, loc)
       @types = types
+      @loc = loc
     end
 
     def sig
@@ -17,6 +18,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       types.map(&:inspect).join(' | ')
     end
   end

@@ -4,10 +4,11 @@ module Myrb
   class TypeList < Annotation
     include Enumerable
 
-    attr_reader :types
+    attr_reader :types, :loc
 
-    def initialize(types)
+    def initialize(types, loc)
       @types = types
+      @loc = loc
     end
 
     def empty?
@@ -19,6 +20,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       "[#{types.map(&:inspect).join(', ')}]"
     end
   end

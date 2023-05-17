@@ -15,6 +15,7 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       type.to_ruby
     end
   end

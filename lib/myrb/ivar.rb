@@ -24,6 +24,10 @@ module Myrb
       ivar.public?
     end
 
+    def protected?
+      ivar.protected?
+    end
+
     def accept(visitor, level)
       visitor.visit_attr(self, level)
     end
@@ -66,12 +70,13 @@ module Myrb
   end
 
   class IVar < Annotation
-    attr_reader :name, :type, :modifiers
+    attr_reader :name, :type, :modifiers, :loc
 
-    def initialize(name, type, modifiers)
+    def initialize(name, type, modifiers, loc)
       @name = name
       @type = type
       @modifiers = modifiers
+      @loc = loc
     end
 
     def bare_name
@@ -104,6 +109,10 @@ module Myrb
 
     def public?
       modifiers.include?('public')
+    end
+
+    def protected?
+      modifiers.include?('protected')
     end
 
     def accept(visitor, level)

@@ -29,14 +29,14 @@ module Myrb
     end
 
     def inspect(indent = 0)
+      return super() if Myrb.debug?
       str = type.const.to_ruby.dup
 
-      unless type.args.empty?
-        type_args = type.args.map { |arg| arg.to_ruby }.join(', ')
+      if type.has_args?
+        type_args = type.type_args.map { |arg| arg.to_ruby }.join(', ')
         str << "[#{type_args}]"
       end
 
-      str << ')'
       str
     end
 

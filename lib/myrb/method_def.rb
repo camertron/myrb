@@ -48,9 +48,9 @@ module Myrb
     def inspect(indent = 0)
       return super() if Myrb.debug?
       (block_arg, *), other_args = args.partition(&:block_arg?)
-      result = "(#{other_args.map(&:inspect).join(', ')})"
+      result = "#{name}: (#{other_args.map(&:inspect).join(', ')})"
       result << " { (#{block_arg.type.arg_types.inspect}) -> #{block_arg.type.return_type.inspect} }" if block_arg
-      result << " -> #{return_type.to_s}"
+      result << " -> #{return_type.inspect}"
       result
     end
   end

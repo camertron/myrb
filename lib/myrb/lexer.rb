@@ -267,7 +267,7 @@ module Myrb
           )
         end
       else
-        Type.new(:untyped, nil)
+        UntypedType.new
       end
 
       loc[:expression] = pos_of(start_token).with(
@@ -339,9 +339,9 @@ module Myrb
           handle_type
         when :tIDENTIFIER
           consume(:tIDENTIFIER, block)
-          Type.new(:untyped)
+          UntypedType.new
         else
-          Type.new(:untyped)
+          UntypedType.new
       end
 
       default_value = if type_of(current) == :tEQL
@@ -403,7 +403,7 @@ module Myrb
       elsif types.size == 1
         types.first
       else
-        Type.new(:untyped, nil)
+        UntypedType.new
       end
     end
 
@@ -498,25 +498,39 @@ module Myrb
     def handle_constant(block = nil)
       return nil unless const_token?(current)
 
+      nilable = false
+      loc = {}
+
       tokens = [].tap do |const_tokens|
         loop do
-          if const_token?(current)
-            const_tokens << current
-            consume(type_of(current), block)
-          else
-            break
+          case type_of(current)
+            when :tCONSTANT, :tCOLON2, :tCOLON3
+              const_tokens << current
+              consume(type_of(current), block)
+            when :tFID
+              nilable = true
+              const_tokens << [:tCONSTANT, [text_of(current).chomp('?'), pos_of(current).adjust(end_pos: -1)]]
+              loc[:question_mark] = pos_of(current).with(begin_pos: pos_of(current).end_pos - 1)
+              block.call(const_tokens.last) if block
+              consume(:tFID)
+              break
+            else
+              break
           end
         end
       end
 
-      loc = {
-        expression: join_ranges(
-          pos_of(tokens.first),
-          pos_of(tokens.last)
-        )
-      }
+      loc[:constant] = join_ranges(
+        pos_of(tokens.first),
+        pos_of(tokens.last)
+      )
 
-      Constant.new(loc, tokens)
+      loc[:expression] = join_ranges(
+        pos_of(tokens.first),
+        pos_of(prev)
+      )
+
+      Constant.new(loc, tokens, nilable)
     end
 
     def join(tokens)
@@ -535,7 +549,7 @@ module Myrb
 
     def const_token?(token)
       case type_of(token)
-        when :tCONSTANT, :tCOLON2, :tCOLON3
+        when :tCONSTANT, :tCOLON2, :tCOLON3, :tFID
           true
         else
           false

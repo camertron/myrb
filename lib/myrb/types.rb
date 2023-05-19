@@ -2,15 +2,23 @@
 
 module Myrb
   class Constant < Annotation
-    attr_reader :loc, :tokens
+    attr_reader :loc, :tokens, :nilable
 
-    def initialize(loc, tokens)
+    def initialize(loc, tokens, nilable = false)
       @loc = loc
       @tokens = tokens
+      @nilable = nilable
     end
+
+    alias nilable? nilable
 
     def to_ruby
       @ruby ||= tokens.map { |_, (text, _)| text }.join
+    end
+
+    def inspect
+      return super() if Myrb.debug?
+      to_ruby + (nilable? ? '?' : '')
     end
 
     def accept(visitor, level)
@@ -33,14 +41,14 @@ module Myrb
     end
 
     def sig
-      const.to_ruby.tap do |result|
+      const.to_ruby.dup.tap do |result|
         result << type_args.sig unless type_args.empty?
       end
     end
 
     def inspect(indent = 0)
       return super() if Myrb.debug?
-      const.to_ruby.tap do |result|
+      const.inspect.tap do |result|
         result << type_args.inspect unless type_args.empty?
       end
     end
@@ -95,7 +103,7 @@ module Myrb
       visitor.visit_nil_type(self, level)
     end
 
-    def to_s
+    def inspect
       'nil'
     end
   end
@@ -104,7 +112,7 @@ module Myrb
   class UntypedType < Annotation
     attr_reader :loc
 
-    def initialize(loc)
+    def initialize(loc = {})
       @loc = loc
     end
 
@@ -112,7 +120,7 @@ module Myrb
       visitor.visit_untyped_type(self, level)
     end
 
-    def to_s
+    def inspect
       'untyped'
     end
   end

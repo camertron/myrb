@@ -16,7 +16,10 @@ module Foo::Bar
     def whatever(arg: String?)
     end
 
-    def each(&block: Proc[[String, String], String]) -> nil
+    def keyword_args(pos_arg: String, *, kwarg: Numeric = 1, other_kwarg: Float)
+    end
+
+    def each(&block: { (foo: String, bar: Numeric) -> String }) -> nil
     end
 
     private def render -> String

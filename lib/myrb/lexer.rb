@@ -6,10 +6,9 @@ module Myrb
     class CouldNotParseArgDefaultValueError < StandardError; end
 
     include Annotations
+    include TokenHelpers
 
     attr_reader :source_buffer, :context
-
-    attr_accessor :parser
 
     VISIBILITY_METHODS = %w(private public protected).freeze
     MIXIN_METHODS = %w(include extend prepend).freeze
@@ -155,61 +154,8 @@ module Myrb
       IVar.new(name, type, modifiers.map { |m| text_of(m) }, loc)
     end
 
-    # def maybe_handle_ivar(block)
-    #   modifiers = [current]
-    #   consume(:tIDENTIFIER)
-
-    #   while type_of(current) == :tIDENTIFIER
-    #     modifiers << current
-    #     consume(:tIDENTIFIER)
-    #   end
-
-    #   if type_of(current) != :tIVAR
-    #     modifiers.each { |mod| block.call(mod) }
-    #     return nil
-    #   end
-
-    #   ivar_token = current
-    #   name = text_of(current)
-    #   consume(:tIVAR)
-    #   consume(:tCOLON)
-    #   type = handle_types
-
-    #   modifiers.each do |modifier|
-    #     case text_of(modifier)
-    #       when 'attr_reader', 'attr_writer', 'attr_accessor'
-    #         block.call(modifier)
-    #     end
-    #   end
-
-    #   ivar = IVar.new(name, type, modifiers.map { |m| text_of(m) })
-
-    #   if ivar.attr?
-    #     block.call([:tSYMBOL, [ivar.bare_name, pos_of(ivar_token)]])
-    #   end
-
-    #   ivar.attrs.each do |attr|
-    #     if attr.private?
-    #       fabricate_and_yield(block, [
-    #         [:tNL, nil],
-    #         [:tIDENTIFIER, 'private'],
-    #         [:tLPAREN2, '('],
-    #         [:tSYMBOL, attr.method_str],
-    #         [:tRPAREN, ')']
-    #       ])
-    #     end
-    #   end
-
-    #   ivar
-    # end
-
     def attr_method?(token)
-      case text_of(token)
-        when *ATTR_METHODS
-          true
-        else
-          false
-      end
+      ATTR_METHODS.include?(text_of(token))
     end
 
     def handle_class(block)
@@ -244,6 +190,7 @@ module Myrb
 
       consume(:kDEF, block)
       method_name = text_of(current)
+
       # The method name is usually a tIDENTIFIER but can be almost anything, including
       # things like tEQ (i.e. as in `def ==(other); end`), etc. We just sorta have to
       # trust that whatever comes after the `def` is the method name “¯\_(ツ)_/¯“
@@ -253,6 +200,7 @@ module Myrb
       if type_of(current) == :tLPAREN2
         consume(:tLPAREN2, block)
         args = handle_args(block)
+        consume(:tRPAREN, block)
       end
 
       loc = {}
@@ -274,27 +222,26 @@ module Myrb
         end_pos: pos_of(prev).end_pos
       )
 
-      MethodDef.new(method_name, Args.new(args), return_type, loc)
+      MethodDef.new(method_name, args, return_type, loc)
     end
 
-    def handle_args(block)
+    def handle_args(block = nil)
       in_kwargs = false
 
-      [].tap do |args|
-        loop do
-          case type_of(current)
-            when :tRPAREN
-              consume(:tRPAREN, block)
-              break
-          end
+      Args.new(
+        [].tap do |args|
+          loop do
+            break if type_of(current) == :tRPAREN
 
-          args << handle_arg(block)
+            args << arg = handle_arg(in_kwargs, block)
+            in_kwargs = true if arg.splat?
 
-          if type_of(current) == :tCOMMA
-            consume(:tCOMMA, block)
+            if type_of(current) == :tCOMMA
+              consume(:tCOMMA, block)
+            end
           end
         end
-      end
+      )
     end
 
     def handle_arg_default_value(block)
@@ -315,38 +262,59 @@ module Myrb
       end
     end
 
-    def handle_arg(block)
+    def handle_arg(in_kwargs = false, block)
       block_arg = false
+      splat = false
 
-      if type_of(current) == :tAMPER
-        block_arg = true
-        consume(:tAMPER, block)
+      case type_of(current)
+        when :tAMPER
+          block_arg = true
+          consume(:tAMPER, block)
+        when :tSTAR
+          splat = true
+          consume(:tSTAR, block)
       end
 
-      label = current
-      arg_name = text_of(label)
+      arg_name = nil
       loc = {}
 
       arg_type = case type_of(current)
         when :tLABEL
+          label = current
+          arg_name = text_of(current)
+
           loc[:colon] = pos_of(current).with(
             begin_pos: pos_of(current).end_pos - 1
           )
 
-          consume(:tLABEL)
-          block.call([:tIDENTIFIER, [arg_name, pos_of(label)]])
+          # If in kwargs, tLABEL is correct; send it up to the parser. If not in kwargs,
+          # swallow the label and send up a tIDENTIFIER positional arg instead.
+          if in_kwargs
+            consume(:tLABEL, block)
+          else
+            consume(:tLABEL)
+            block.call([:tIDENTIFIER, [arg_name, pos_of(label)]]) if block
+          end
 
-          handle_type
+          block_arg ? handle_proc_type : handle_type
         when :tIDENTIFIER
+          arg_name = text_of(current)
           consume(:tIDENTIFIER, block)
           UntypedType.new
         else
           UntypedType.new
       end
 
-      default_value = if type_of(current) == :tEQL
+      default_value_tokens = if type_of(current) == :tEQL
         loc[:default_equals] = pos_of(current)
-        consume(:tEQL, block)
+
+        # if this is a kwarg, don't send tEQL to the parser since kwargs specify
+        # default values after the label colon instead of an equals sign
+        if in_kwargs
+          consume(:tEQL)
+        else
+          consume(:tEQL, block)
+        end
 
         handle_arg_default_value(block).tap do
           loc[:default_expression] = loc[:default_equals].with(
@@ -358,7 +326,15 @@ module Myrb
         []
       end
 
-      Arg.new(arg_name, arg_type, block_arg, default_value, loc)
+      Arg.new(
+        name: arg_name,
+        type: arg_type,
+        loc: loc,
+        block_arg: block_arg,
+        kwarg: in_kwargs,
+        splat: splat,
+        default_value_tokens: default_value_tokens
+      )
     end
 
     def handle_types
@@ -462,6 +438,34 @@ module Myrb
           )
         }
       )
+    end
+
+    def handle_proc_type
+      loc = {
+        open_curly: pos_of(current)
+      }
+
+      consume(:tLBRACE)
+
+      loc[:open_paren] = pos_of(current)
+      consume(:tLPAREN)
+
+      args = handle_args
+
+      loc[:close_paren] = pos_of(current)
+      consume(:tRPAREN)
+
+      loc[:arrow] = pos_of(current)
+      consume(:tLAMBDA)
+
+      return_type = handle_types
+
+      loc[:close_curly] = pos_of(current)
+      consume(:tRCURLY)
+
+      loc[:expression] = loc[:open_curly].with(end_pos: loc[:close_curly].end_pos)
+
+      ProcType.new(loc, args, return_type)
     end
 
     def handle_type_list
@@ -578,18 +582,6 @@ module Myrb
       else
         items[0..-2].join(', ') << ' or ' << items[-1]
       end
-    end
-
-    def type_of(token)
-      token[0]
-    end
-
-    def text_of(token)
-      token[1][0]
-    end
-
-    def pos_of(token)
-      token[1][1]
     end
 
     def get_next

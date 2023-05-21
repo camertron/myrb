@@ -127,26 +127,19 @@ module Myrb
 
 
   class ProcType < Annotation
-    attr_reader :loc, :type_args
+    attr_reader :loc, :args, :return_type
 
-    def initialize(loc, type_args)
+    def initialize(loc, args, return_type)
       @loc = loc
-      @type_args = type_args
-    end
-
-    def arg_types
-      @arg_types ||= type_args.args[0..-2]
-    end
-
-    def return_type
-      type_args.args.last
+      @args = args
+      @return_type = return_type
     end
 
     def sig
       result = ["T.proc"].tap do |parts|
-        unless arg_types.empty?
-          at = arg_types.map.with_index do |arg_type, i|
-            "arg#{i}: #{arg_type.sig}"
+        unless args.empty?
+          at = args.map.with_index do |arg, i|
+            "arg#{i}: #{arg.sig}"
           end
 
           parts << "params(#{at.join(', ')})"
@@ -165,7 +158,7 @@ module Myrb
     def inspect
       return super() if Myrb.debug?
       (+'{ (').tap do |result|
-        result << arg_types.map(&:inspect).join(', ')
+        result << args.map(&:inspect).join(', ')
         result << ') -> '
 
         if return_type

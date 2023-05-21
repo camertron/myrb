@@ -30,6 +30,18 @@ module Myrb
       args.each(&block)
     end
 
+    def [](idx)
+      args[idx]
+    end
+
+    def first
+      args.first
+    end
+
+    def last
+      args.last
+    end
+
     def inspect(indent = 0)
       return super() if Myrb.debug?
       args.map { |arg| arg.inspect(indent) }.join(', ')

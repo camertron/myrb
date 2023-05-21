@@ -34,9 +34,28 @@ module Myrb
 
     def on_argument(node)
       annotator.on_argument(node) do |arg|
-        # TODO: handle keyword arguments
-        if colon_loc = arg.loc[:colon]
-          remove(colon_loc.with(end_pos: arg.type.loc[:expression].end_pos))
+        if arg.kwarg?
+          # TODO maybe? Handle case where type is omitted (may be impossible)
+          remove(
+            if arg.default_value?
+              # remove from after colon to after default equals
+              arg.loc[:colon].with(
+                begin_pos: arg.loc[:colon].end_pos,
+                end_pos: arg.loc[:default_equals].end_pos
+              )
+            else
+              # no default value, so remove the type and whitespace
+              arg.loc[:colon].with(
+                begin_pos: arg.loc[:colon].end_pos,
+                end_pos: arg.type.loc[:expression].end_pos
+              )
+            end
+          )
+        else
+          # remove the type if present
+          if colon_loc = arg.loc[:colon]
+            remove(colon_loc.with(end_pos: arg.type.loc[:expression].end_pos))
+          end
         end
 
         super

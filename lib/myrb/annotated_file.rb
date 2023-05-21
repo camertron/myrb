@@ -42,7 +42,6 @@ module Myrb
         buffer = make_source_buffer
         lexer = Myrb::Lexer.new(buffer, 0, context)
         parser = Myrb::Parser.new(lexer)
-        lexer.parser = parser
         parser.parse(buffer)
       end
     end

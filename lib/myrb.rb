@@ -23,6 +23,7 @@ module Myrb
   autoload :RBSVisitor,        'myrb/rbs_visitor'
   autoload :Rewriter,          'myrb/rewriter'
   autoload :Scope,             'myrb/scope'
+  autoload :TokenHelpers,      'myrb/token_helpers'
   autoload :TopLevelScope,     'myrb/top_level_scope'
   autoload :TypeList,          'myrb/type_list'
   autoload :UnionType,         'myrb/union_type'

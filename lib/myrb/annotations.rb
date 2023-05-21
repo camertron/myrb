@@ -28,7 +28,6 @@ module Myrb
     register_type_class("Enumerable", EnumerableType)
     register_type_class("Enumerator", EnumeratorType)
     register_type_class("Hash", HashType)
-    register_type_class("Proc", ProcType)
     register_type_class("Range", RangeType)
     register_type_class("Set", SetType)
     register_type_class("SelfType", SelfType)

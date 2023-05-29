@@ -135,6 +135,10 @@ module Myrb
       @return_type = return_type
     end
 
+    def name
+      nil
+    end
+
     def sig
       result = ["T.proc"].tap do |parts|
         unless args.empty?
@@ -178,9 +182,10 @@ module Myrb
 
 
   class ArrayType < Annotation
-    attr_reader :loc, :type_args
+    attr_reader :const, :loc, :type_args
 
-    def initialize(loc, type_args)
+    def initialize(const, loc, type_args)
+      @const = const
       @loc = loc
       @type_args = type_args
     end
@@ -205,9 +210,10 @@ module Myrb
 
 
   class SetType < Annotation
-    attr_reader :loc, :type_args
+    attr_reader :const, :loc, :type_args
 
-    def initialize(loc, type_args)
+    def initialize(const, loc, type_args)
+      @const = const
       @loc = loc
       @type_args = type_args
     end
@@ -232,9 +238,10 @@ module Myrb
 
 
   class HashType < Annotation
-    attr_reader :loc, :type_args
+    attr_reader :const, :loc, :type_args
 
-    def initialize(loc, type_args)
+    def initialize(const, loc, type_args)
+      @const = const
       @loc = loc
       @type_args = type_args
     end
@@ -263,9 +270,10 @@ module Myrb
 
 
   class RangeType < Annotation
-    attr_reader :loc, :type_args
+    attr_reader :const, :loc, :type_args
 
     def initialize(type_args)
+      @const = const
       @loc = loc
       @type_args = type_args
     end
@@ -290,9 +298,10 @@ module Myrb
 
 
   class EnumerableType < Annotation
-    attr_reader :loc, :type_args
+    attr_reader :const, :loc, :type_args
 
-    def initialize(loc, type_args)
+    def initialize(const, loc, type_args)
+      @const = const
       @loc = loc
       @type_args = type_args
     end
@@ -317,9 +326,10 @@ module Myrb
 
 
   class EnumeratorType < Annotation
-    attr_reader :loc, :type_args
+    attr_reader :const, :loc, :type_args
 
     def initialize(loc, type_args)
+      @const = const
       @loc = loc
       @type_args = type_args
     end
@@ -346,7 +356,8 @@ module Myrb
   class ClassOf < Annotation
     attr_reader :loc, :type_args
 
-    def initialize(loc, type_args)
+    def initialize(const, loc, type_args)
+      @const = const
       @loc = loc
       @type_args = type_args
     end
@@ -371,9 +382,10 @@ module Myrb
 
 
   class SelfType
-    attr_reader :loc
+    attr_reader :const, :loc
 
-    def initialize(loc)
+    def initialize(const, loc)
+      @const = const
       @loc = loc
     end
 

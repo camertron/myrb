@@ -44,8 +44,14 @@ module Myrb
     end
 
     def on_argument(node)
-      arg_name, value_node = *node
-      arg = find_arg(arg_name.to_s)
+      arg = case node.type
+        when :restarg
+          find_rest_arg
+        else
+          arg_name, value_node = *node
+          find_arg(arg_name.to_s)
+      end
+
       return nil unless arg
 
       yield arg
@@ -95,6 +101,10 @@ module Myrb
       current_method.args.find do |arg|
         arg.name == name
       end
+    end
+
+    def find_rest_arg
+      current_method.args.find(&:naked_splat?)
     end
 
     def find_ivar(name)

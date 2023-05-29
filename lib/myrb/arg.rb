@@ -51,16 +51,24 @@ module Myrb
       !kwarg? && !block_arg?
     end
 
+    alias positional? positional_arg?
+
     def default_value?
       !@default_value_tokens.empty?
     end
 
     def default_value_string
+      return unless default_value?
+
       range = pos_of(@default_value_tokens.first).with(
         end_pos: pos_of(@default_value_tokens.last).end_pos
       )
 
       range.source
+    end
+
+    def naked_splat?
+      splat? && name.nil?
     end
   end
 end

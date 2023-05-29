@@ -2,6 +2,7 @@
 
 module Myrb
   autoload :AnnotatedFile,     'myrb/annotated_file'
+  autoload :AnnotatedSource,   'myrb/annotated_source'
   autoload :Annotation,        'myrb/annotation'
   autoload :Annotations,       'myrb/annotations'
   autoload :Annotator,         'myrb/annotator'

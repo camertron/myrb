@@ -13,10 +13,13 @@ module Foo::Bar
       @thing = thing
     end
 
-    def whatever(arg: String?)
+    def whatever[U](arg: String?)
     end
 
     def keyword_args(pos_arg: String, *, kwarg: Numeric = 1, other_kwarg: Float)
+    end
+
+    def another(foo, *)
     end
 
     def each(&block: { (foo: String, bar: Numeric) -> String }) -> nil

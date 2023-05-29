@@ -9,7 +9,7 @@ module Myrb
 
       def get_type(const, type_args, loc)
         if type_klass = registered_type_classes[const.to_ruby]
-          type_klass.new(loc, type_args)
+          type_klass.new(const, loc, type_args)
         else
           Type.new(const, loc, type_args)
         end

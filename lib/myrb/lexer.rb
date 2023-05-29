@@ -195,6 +195,8 @@ module Myrb
       # things like tEQ (i.e. as in `def ==(other); end`), etc. We just sorta have to
       # trust that whatever comes after the `def` is the method name “¯\_(ツ)_/¯“
       consume(type_of(current), block)
+
+      type_args = handle_type_args
       args = []
 
       if type_of(current) == :tLPAREN2
@@ -222,7 +224,7 @@ module Myrb
         end_pos: pos_of(prev).end_pos
       )
 
-      MethodDef.new(method_name, args, return_type, loc)
+      MethodDef.new(method_name, type_args, args, return_type, loc)
     end
 
     def handle_args(block = nil)
@@ -244,25 +246,8 @@ module Myrb
       )
     end
 
-    def handle_arg_default_value(block)
-      result = ExpressionParser.parse(@source_buffer, pos_of(current).begin_pos)
-
-      unless result
-        pos = pos_of(current)
-        raise CouldNotParseArgDefaultValueError, "the arg default on line #{pos.line} column #{pos.column} could not be parsed"
-      end
-
-      [].tap do |tokens|
-        loop do
-          break if pos_of(current).end_pos > result.loc.expression.end_pos
-
-          tokens << current
-          consume(type_of(current), block)
-        end
-      end
-    end
-
     def handle_arg(in_kwargs = false, block)
+      start_token = current
       block_arg = false
       splat = false
 
@@ -288,8 +273,10 @@ module Myrb
           )
 
           # If in kwargs, tLABEL is correct; send it up to the parser. If not in kwargs,
-          # swallow the label and send up a tIDENTIFIER positional arg instead.
-          if in_kwargs
+          # swallow the label and send up a tIDENTIFIER positional arg instead. Since
+          # the block arg comes last (and is not a keyword arg), exempt it from kwarg
+          # handling even if we are currently parsing kwargs.
+          if in_kwargs && !block_arg
             consume(:tLABEL, block)
           else
             consume(:tLABEL)
@@ -326,6 +313,12 @@ module Myrb
         []
       end
 
+      loc[:expression] = pos_of(start_token).with(end_pos: pos_of(current).begin_pos)
+
+      if type_of(current) == :tCOMMA
+        loc[:trailing_comma] = pos_of(current)
+      end
+
       Arg.new(
         name: arg_name,
         type: arg_type,
@@ -335,6 +328,24 @@ module Myrb
         splat: splat,
         default_value_tokens: default_value_tokens
       )
+    end
+
+    def handle_arg_default_value(block)
+      result = ExpressionParser.parse(@source_buffer, pos_of(current).begin_pos)
+
+      unless result
+        pos = pos_of(current)
+        raise CouldNotParseArgDefaultValueError, "the arg default on line #{pos.line} column #{pos.column} could not be parsed"
+      end
+
+      [].tap do |tokens|
+        loop do
+          break if pos_of(current).end_pos > result.loc.expression.end_pos
+
+          tokens << current
+          consume(type_of(current), block)
+        end
+      end
     end
 
     def handle_types
@@ -400,10 +411,27 @@ module Myrb
       const = handle_constant
       return nil unless const
 
+      type_args = handle_type_args
+      stop_token = prev
+
+      Annotations.get_type(
+        const,
+        type_args, {
+          constant: pos_of(start_token),
+          expression: join_ranges(
+            pos_of(start_token),
+            pos_of(stop_token)
+          )
+        }
+      )
+    end
+
+    def handle_type_args
       type_args = []
-      count = 0
+      start_token = nil
 
       if type_of(current) == :tLBRACK2
+        start_token = current
         consume(:tLBRACK2)
 
         until type_of(current) == :tRBRACK
@@ -419,25 +447,11 @@ module Myrb
 
       stop_token = prev
 
-      arg_loc = {
-        expression: type_args.empty? ? nil : const.loc[:expression].with(
-          begin_pos: const.loc[:expression].end_pos,
-          end_pos: pos_of(stop_token).end_pos
-        )
+      loc = {
+        expression: type_args.empty? ? nil : join_ranges(pos_of(start_token), pos_of(stop_token))
       }
 
-      type_args = TypeArgs.new(arg_loc, type_args)
-
-      Annotations.get_type(
-        const,
-        type_args, {
-          constant: pos_of(start_token),
-          expression: join_ranges(
-            pos_of(start_token),
-            pos_of(stop_token)
-          )
-        }
-      )
+      TypeArgs.new(loc, type_args)
     end
 
     def handle_proc_type

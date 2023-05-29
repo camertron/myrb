@@ -18,6 +18,12 @@ module Myrb
       args.map(&:sig).join(', ')
     end
 
+    def size
+      args.size
+    end
+
+    alias length size
+
     def empty?
       args.empty?
     end

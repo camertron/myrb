@@ -35,7 +35,6 @@ module Myrb
     def on_argument(node)
       annotator.on_argument(node) do |arg|
         if arg.kwarg?
-          # TODO maybe? Handle case where type is omitted (may be impossible)
           remove(
             if arg.default_value?
               # remove from after colon to after default equals
@@ -51,6 +50,16 @@ module Myrb
               )
             end
           )
+        elsif arg.naked_splat?
+          remove(
+            smart_strip(
+              if comma_loc = arg.loc[:trailing_comma]
+                arg.loc[:expression].with(end_pos: comma_loc.end_pos)
+              else
+                arg.loc[:expression]
+              end
+            )
+          )
         else
           # remove the type if present
           if colon_loc = arg.loc[:colon]
@@ -59,6 +68,31 @@ module Myrb
         end
 
         super
+      end
+    end
+
+    def starts_line?(range)
+      nl_idx = range.source_buffer.source.rindex("\n", range.begin_pos)
+      return true unless nl_idx
+
+      !!(range.source_buffer.source[(nl_idx + 1)...range.begin_pos] =~ /\A\s*\z/)
+    end
+
+    def rstrip(range)
+      idx = range.source_buffer.source.index(/\S/, range.end_pos)
+      range.with(end_pos: idx)
+    end
+
+    def lstrip(range)
+      idx = range.source_buffer.source.rindex(/\S/, range.begin_pos - 1)
+      range.with(begin_pos: idx + 1)
+    end
+
+    def smart_strip(range)
+      if starts_line?(range)
+        rstrip(range)
+      else
+        lstrip(range)
       end
     end
 

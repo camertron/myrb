@@ -2,10 +2,11 @@
 
 module Myrb
   class MethodDef < Annotation
-    attr_reader :name, :args, :return_type, :loc, :method_defs
+    attr_reader :name, :type_args, :args, :return_type, :loc, :method_defs
 
-    def initialize(name, args, return_type, loc)
+    def initialize(name, type_args, args, return_type, loc)
       @name = name
+      @type_args = type_args
       @args = args
       @return_type = return_type
       @loc = loc
@@ -48,7 +49,9 @@ module Myrb
     def inspect(indent = 0)
       return super() if Myrb.debug?
       (block_arg, *), other_args = args.partition(&:block_arg?)
-      result = "#{name}: (#{other_args.map(&:inspect).join(', ')})"
+      result = name.dup
+      result << type_args.inspect unless type_args.empty?
+      result << ": (#{other_args.map(&:inspect).join(', ')})"
       result << " #{block_arg.inspect})" if block_arg
       result << " -> #{return_type.inspect}"
       result

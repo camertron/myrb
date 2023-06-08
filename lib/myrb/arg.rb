@@ -57,6 +57,8 @@ module Myrb
       !@default_value_tokens.empty?
     end
 
+    alias optional? default_value?
+
     def default_value_string
       return unless default_value?
 

@@ -2,7 +2,7 @@
 
 module Foo::Bar
   class TestComponent[K, V] < ViewComponent::Base
-    private attr_reader foobars: Hash[String, Thing?]
+    private attr_reader foobars: Array[Hash[String, Thing?]]
 
     prepend Boo
     include Bar

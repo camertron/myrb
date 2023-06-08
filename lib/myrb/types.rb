@@ -89,6 +89,10 @@ module Myrb
     def each(&block)
       @args.each(&block)
     end
+
+    def accept(visitor, level)
+      visitor.visit_type_args(self, level)
+    end
   end
 
 

@@ -3,19 +3,35 @@
 module Myrb
   class RBSVisitor < AnnotationVisitor
     def visit_arg(node, level)
-      "#{node.block_arg ? '&' : ''}#{node.name}: #{visit(node.type, level)}"
+      if node.kwarg?
+        "#{node.optional? ? "?" : ""}#{node.name}: #{visit(node.type, level)}"
+      else
+        "#{node.optional? ? "?" : ""}#{visit(node.type, level)}"
+      end
     end
 
     def visit_args(node, level)
-      node.args.map { |a| visit(a, level) }.join(', ')
+      arg_strs = node.args.filter_map do |a|
+        next if a.naked_splat?
+        next if a.block_arg?
+
+        visit(a, level)
+      end
+
+      arg_strs.join(', ')
+    end
+
+    def visit_type_args(node, level)
+      "[#{node.map { |ta| visit(ta, level) }.join(', ')}]"
     end
 
     def visit_class_def(node, level)
-      ''.tap do |result|
+      (+'').tap do |result|
         type_args = if node.type.has_args?
-          '['.tap do |ta|
-            node.type.type_args.map do |type_arg|
-              ta << "#{visit(type_arg.const, level)}"
+          (+'[').tap do |ta|
+            node.type.type_args.map.with_index do |type_arg, idx|
+              ta << ', ' if idx > 0
+              ta << "#{visit(type_arg, level)}"
             end
 
             ta << ']'
@@ -29,7 +45,7 @@ module Myrb
 
         unless node.mixins.empty?
           lines << node.mixins.map do |kind, const|
-            indent("#{kind} #{visit(const)}", level + 1)
+            indent("#{kind} #{visit(const, level)}", level + 1)
           end.join("\n")
         end
 
@@ -40,7 +56,7 @@ module Myrb
           end
         end
 
-        lines += node.methods.flat_map do |mtd|
+        lines += node.method_defs.flat_map do |mtd|
           visit(mtd, level + 1)
         end
 
@@ -58,39 +74,45 @@ module Myrb
     end
 
     def visit_attr(node, level)
-      indent("#{node.ivar.name}: #{visit(node.ivar.type, level)}", level)
+      indent("#{node.ivar.modifiers.join(' ')} #{node.ivar.name}: #{visit(node.ivar.type, level)}", level)
     end
 
     def visit_method_def(node, level)
-      ''.tap do |result|
+      (+'').tap do |result|
         return_type = if node.return_type
           visit(node.return_type, level)
         else
           'void'
         end
 
-        result << indent("def #{node.name}: (#{visit(node.args, level)}) -> #{return_type}", level)
+        block_arg = node.args.block_arg
+
+        result << indent("def #{node.name}", level)
+        result << visit(node.type_args, level) unless node.type_args.empty?
+        result << ": (#{visit(node.args, level)})"
+        result << " #{visit_arg(block_arg, level)}" if block_arg
+        result << " -> #{return_type}"
       end
     end
 
     def visit_module_def(node, level)
-      ''.tap do |result|
-        result << indent("module #{visit(node.type)}\n", level)
+      (+'').tap do |result|
+        result << indent("module #{visit(node.type, level)}\n", level)
         result << visit_scope(node, level + 1)
         result << indent("end\n", level)
       end
     end
 
     def visit_scope(node, level)
-      lines = [node.mixins.map   { |kind, const| indent("#{kind} #{visit(const)}", level) }.join("\n")]
-      lines << node.scopes.map   { |scp| visit(scp, level) }.join("\n")
-      lines << node.methods.map  { |mtd| visit(mtd, level) }.join("\n")
+      lines = [node.mixins.map      { |kind, const| indent("#{kind} #{visit(const)}", level) }.join("\n")]
+      lines << node.scopes.map      { |scp| visit(scp, level) }.join("\n")
+      lines << node.method_defs.map { |mtd| visit(mtd, level) }.join("\n")
 
       lines.reject(&:empty?).join("\n\n")
     end
 
     def visit_top_level_scope(node, level)
-      ''.tap do |result|
+      (+'').tap do |result|
         result << "# typed: #{node.type_sigil}\n\n" if node.type_sigil
         result << visit_scope(node, level)
       end
@@ -100,7 +122,9 @@ module Myrb
     end
 
     def visit_constant(node, level)
-      node.tokens.map { |_, (text, _)| text }.join
+      str = node.tokens.map { |_, (text, _)| text }.join
+      str << (node.nilable? ? '?' : '')
+      str
     end
 
     def visit_type(node, level)
@@ -108,6 +132,7 @@ module Myrb
     end
 
     def visit_proc_type(node, level)
+      "{ (#{visit(node.args, level)}) -> #{visit(node.return_type, level)} }"
     end
 
     def visit_array_type(node, level)
@@ -118,6 +143,7 @@ module Myrb
     end
 
     def visit_hash_type(node, level)
+      "Hash[#{visit(node.key_type, level)}, #{visit(node.value_type, level)}]"
     end
 
     def visit_range_type(node, level)

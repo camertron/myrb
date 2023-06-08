@@ -197,7 +197,7 @@ module Myrb
       consume(type_of(current), block)
 
       type_args = handle_type_args
-      args = []
+      args = nil
 
       if type_of(current) == :tLPAREN2
         consume(:tLPAREN2, block)
@@ -224,7 +224,13 @@ module Myrb
         end_pos: pos_of(prev).end_pos
       )
 
-      MethodDef.new(method_name, type_args, args, return_type, loc)
+      MethodDef.new(
+        method_name,
+        type_args,
+        args || Args.new([]),
+        return_type,
+        loc
+      )
     end
 
     def handle_args(block = nil)
@@ -482,6 +488,7 @@ module Myrb
       ProcType.new(loc, args, return_type)
     end
 
+    # is this used anymore??
     def handle_type_list
       start_token = current
       consume(:tLBRACK)

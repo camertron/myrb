@@ -3,6 +3,7 @@
 module Myrb
   autoload :AnnotatedFile,     'myrb/annotated_file'
   autoload :AnnotatedSource,   'myrb/annotated_source'
+  autoload :AnnotationVisitor, 'myrb/annotation_visitor'
   autoload :Annotation,        'myrb/annotation'
   autoload :Annotations,       'myrb/annotations'
   autoload :Annotator,         'myrb/annotator'
@@ -21,6 +22,7 @@ module Myrb
   autoload :ModuleDef,         'myrb/module_def'
   autoload :Parser,            'myrb/parser'
   autoload :Processor,         'myrb/processor'
+  autoload :Project,           'myrb/project'
   autoload :RBSVisitor,        'myrb/rbs_visitor'
   autoload :Rewriter,          'myrb/rewriter'
   autoload :Scope,             'myrb/scope'

@@ -52,5 +52,13 @@ module Myrb
       return super() if Myrb.debug?
       args.map { |arg| arg.inspect(indent) }.join(', ')
     end
+
+    def block_arg
+      args.find(&:block_arg?)
+    end
+
+    def accept(visitor, level)
+      visitor.visit_args(self, level)
+    end
   end
 end

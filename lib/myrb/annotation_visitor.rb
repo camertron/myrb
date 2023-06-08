@@ -14,6 +14,9 @@ module Myrb
     def visit_args(node, level)
     end
 
+    def visit_type_args(node, level)
+    end
+
     def visit_class_def(node, level)
     end
 

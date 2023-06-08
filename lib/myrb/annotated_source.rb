@@ -31,6 +31,13 @@ module Myrb
       end
     end
 
+    def rbs_source
+      @rbs_source ||= begin
+        visitor = Myrb::RBSVisitor.new
+        visitor.visit(annotations, 0)
+      end
+    end
+
     private
 
     def process!

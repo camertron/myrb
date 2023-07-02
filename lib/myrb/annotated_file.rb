@@ -21,6 +21,17 @@ module Myrb
 
       FileUtils.mkdir_p(File.dirname(path_to_use))
       File.write(path_to_use, rbs_source)
+
+      path_to_use
+    end
+
+    def write_rewritten_source(path_to_use = rewritten_source_path)
+      raise Errno::ENOENT.new(path_to_use) unless path_to_use
+
+      FileUtils.mkdir_p(File.dirname(path_to_use))
+      File.write(path_to_use, rewritten_source)
+
+      path_to_use
     end
 
     private
@@ -28,12 +39,18 @@ module Myrb
     def rbs_path
       return nil unless project
 
-      relative_path = Pathname(path)
-        .relative_path_from(project.root_path)
-        .sub_ext('.rbs')
-        .to_s
+      @rbs_path ||= begin
+        relative_path = Pathname(path)
+          .relative_path_from(project.root_path)
+          .sub_ext('.rbs')
+          .to_s
 
-      File.join(project.sig_path, relative_path)
+        File.join(project.sig_path, relative_path)
+      end
+    end
+
+    def rewritten_source_path
+      @rewritten_source_path ||= Pathname(path).sub_ext('.rb').to_s
     end
 
     def make_source_buffer

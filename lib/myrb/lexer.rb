@@ -102,9 +102,9 @@ module Myrb
           ident = text_of(current)
 
           case ident
-            when *VISIBILITY_METHODS, *ATTR_METHODS
-              if ivar = maybe_handle_ivar(block)
-                current_scope.ivars << ivar
+            when *ATTR_METHODS
+              if attrs = handle_attrs(block)
+                current_scope.attrs.concat(attrs)
               end
             when *MIXIN_METHODS
               consume(:tIDENTIFIER, block)
@@ -114,44 +114,86 @@ module Myrb
               consume(type_of(current), block)
           end
 
+        when :tIVAR
+          ivar_token = current
+          consume(type_of(ivar_token))
+
+          if type_of(current) == :tCOLON
+            consume(:tCOLON)
+            ivar = handle_ivar_decl(ivar_token)
+            current_scope.ivars << ivar
+
+            if type_of(current) == :tNL
+              consume(:tNL)
+            end
+          else
+            block.call(ivar_token) if block
+            consume(type_of(current), block)
+          end
         else
           consume(type_of(current), block)
       end
     end
 
-    def maybe_handle_ivar(block)
-      modifiers = [current]
-      consume(type_of(current))
+    def handle_ivar_decl(name_token)
+      type = handle_types
+      loc = {
+        expression: pos_of(name_token).with(end_pos: pos_of(current).begin_pos),
+        name: pos_of(name_token)
+      }
 
-      # this isn't an attr_*, so bail out
-      if type_of(current) != :tIDENTIFIER && type_of(current) != :tLABEL
-        block.call(modifiers[0])
+      IVar.new(text_of(name_token), type, loc)
+    end
+
+    # @TODO: handle list of attrs, eg. attr_reader foo: String, bar: String
+    def handle_attrs(block)
+      unless ATTR_METHODS.include?(text_of(current))
         return nil
       end
 
-      until attr_method?(prev)
-        modifiers << current
-        consume(:tIDENTIFIER, block)
+      attr_method = current
+      consume(:tIDENTIFIER, block)
+
+      name = nil
+      type = UntypedType.new
+
+      # current can either be a label with a type, or an identifier without a type
+      case type_of(current)
+        when :tLABEL
+          ivar_token = current
+          name = text_of(current)
+          consume(type_of(current))
+          type = handle_types
+
+          fabricate_and_yield(
+            block, [
+              [:tSYMBOL, [text_of(ivar_token)]]
+            ]
+          )
+
+        when :tIDENTIFIER
+          name = text_of(current)
+          consume(type_of(current), block)
       end
 
-      # current can either be a label or an identifier
-      ivar_token = current
-      name = text_of(current)
-      consume(type_of(current))
-      type = handle_types
-
-      fabricate_and_yield(
-        block, [
-          [:tSYMBOL, [text_of(ivar_token)]]
-        ]
-      )
-
       loc = {
-        expression: pos_of(modifiers.first).with(end_pos: pos_of(prev).end_pos),
+        expression: pos_of(attr_method).with(end_pos: pos_of(current).begin_pos),
         label: pos_of(ivar_token)
       }
 
-      IVar.new(name, type, modifiers.map { |m| text_of(m) }, loc)
+      attrs = []
+
+      case text_of(attr_method)
+        when "attr_reader", "attr_accessor"
+          attrs << AttrReader.new(name, type, loc)
+      end
+
+      case text_of(attr_method)
+        when "attr_writer", "attr_accessor"
+          attrs << AttrWriter.new(name, type, loc)
+      end
+
+      attrs
     end
 
     def attr_method?(token)

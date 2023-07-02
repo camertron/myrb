@@ -11,6 +11,9 @@ Gem::Specification.new do |s|
   s.platform = Gem::Platform::RUBY
 
   s.add_dependency 'parser', '~> 3.0'
+  s.add_dependency 'onload', '~> 1.0'
+
+  s.add_development_dependency 'steep', '~> 1.4'
 
   s.require_path = 'lib'
 

@@ -2,12 +2,13 @@
 
 module Myrb
   class Scope < Annotation
-    attr_reader :type, :method_defs, :scopes, :ivars, :mixins
+    attr_reader :type, :method_defs, :scopes, :attrs, :ivars, :mixins
 
     def initialize(type)
       @type = type
       @method_defs = []
       @scopes = []
+      @attrs = []
       @ivars = []
       @mixins = []
     end

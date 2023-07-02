@@ -2,3 +2,5 @@
 Gemfile.lock
 .tool-versions
 pkg/
+examples/component.rb
+examples/sig/*

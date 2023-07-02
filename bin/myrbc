@@ -9,27 +9,18 @@ require 'myrb'
 
 class MyrbCLI
   def self.parse(argv)
-    if argv.empty?
-      puts 'Please pass a file or directory to transpile'
-      exit 1
-    end
-
     options = {
-      annotations_path: Myrb.default_annotations_path,
+      project_dir: Dir.getwd
     }
 
-    if argv.first != '-h' && argv.first != '--help'
-      options[:in_path] = argv.shift
-    end
-
     parser = OptionParser.new do |opts|
-      opts.banner = "Usage: myrbc path [options]"
+      opts.banner = "Usage: myrbc [options]"
 
       oneline(<<~DESC).tap do |desc|
-        Write RBS files to this directory (default: #{options[:annotations_path]}).
+        Use this directory as the project root instead of the current working directory.
       DESC
-        opts.on('-dDIR', '--annotations-path=DIR', desc) do |annotations_path|
-          options[:annotations_path] = annotations_path
+        opts.on('-pDIR', '--project-dir=DIR', desc) do |project_dir|
+          options[:project_dir] = project_dir
         end
       end
 
@@ -52,50 +43,27 @@ class MyrbCLI
   end
 
   def validate
-    unless File.exist?(in_path)
-      puts "Could not find file at '#{in_path}'"
-      exit 1
-    end
+    # do nothing for now
   end
 
   def each_file(&block)
-    files = if in_path.directory?
-      in_path.glob(File.join('**', '*.rb'))
-    else
-      [in_path]
-    end
-
-    files.each do |file|
-      annotation_file = begin
-        relative_file = file.relative_path_from(Dir.getwd)
-        annotations_path.join(relative_file).sub_ext(".rbs")
-      end
-
-      yield file.to_s, annotation_file.to_s
-    end
-  end
-
-  def in_path
-    @in_path ||= Pathname(@options[:in_path]).expand_path
+    project.each_file(&block)
   end
 
   private
 
-  def annotations_path
-    @annotations_path ||= Pathname(@options[:annotations_path]).expand_path
+  def project
+    @project = Myrb::Project.new(@options[:project_dir])
   end
 end
 
 cli = MyrbCLI.parse(ARGV)
 cli.validate
 
-cli.each_file do |in_file, annotation_file|
-  file = Myrb::AnnotatedFile.new(in_file)
+cli.each_file do |file|
+  source_path = file.write_rewritten_source
+  puts "Wrote #{source_path}"
 
-  visitor = Myrb::RBSVisitor.new
-  annotations = visitor.visit(file.annotations, 0)
-
-  FileUtils.mkdir_p(File.dirname(annotation_file))
-  ::File.write(annotation_file, annotations)
-  puts "Wrote #{annotation_file}"
+  rbs_path = file.write_rbs
+  puts "Wrote #{rbs_path}"
 end

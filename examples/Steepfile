@@ -1,9 +1,16 @@
+require 'myrb'
+
 D = Steep::Diagnostic
 
-target :lib do
+Myrb::Project.new(__dir__).each_file do |file|
+  file.write_rbs
+  file.write_rewritten_source
+end
+
+target :examples do
   signature "sig"
 
-  check "test/tester3.rb"
+  check "."
   # check "lib"                       # Directory name
   # check "Gemfile"                   # File name
   # check "app/models/**/*.rb"        # Glob

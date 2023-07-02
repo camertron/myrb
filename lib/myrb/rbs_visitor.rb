@@ -49,11 +49,12 @@ module Myrb
           end.join("\n")
         end
 
-        attr_ivars = node.ivars.select(&:attr?)
-        unless attr_ivars.empty?
-          lines << attr_ivars.map do |ivar|
-            ivar.attrs.map { |a| visit(a, level + 1) }.join("\n")
-          end
+        unless node.attrs.empty?
+          lines << node.attrs.map { |a| visit(a, level + 1) }.join("\n")
+        end
+
+        unless node.ivars.empty?
+          lines << node.ivars.map { |ivar| visit(ivar, level + 1) }.join("\n")
         end
 
         lines += node.method_defs.flat_map do |mtd|
@@ -70,11 +71,24 @@ module Myrb
     end
 
     def visit_ivar(node, level)
-      indent("#{node.ivar.name}: #{visit(node.ivar.type, level)}", level)
+      indent("#{node.name}: #{visit(node.type, level)}", level)
     end
 
     def visit_attr(node, level)
-      indent("#{node.ivar.modifiers.join(' ')} #{node.ivar.name}: #{visit(node.ivar.type, level)}", level)
+      lines = []
+
+      case node.kind
+        when "attr_reader", "attr_accessor"
+          lines << indent("def #{node.name}: () -> #{visit(node.type, level)}", level)
+      end
+
+      case node.kind
+        when "attr_writer", "attr_accessor"
+          type = visit(node.type, level)
+          lines << indent("def #{node.name}=: (#{type}) -> #{type}", level)
+      end
+
+      lines.join("\n")
     end
 
     def visit_method_def(node, level)
@@ -88,8 +102,9 @@ module Myrb
         block_arg = node.args.block_arg
 
         result << indent("def #{node.name}", level)
-        result << visit(node.type_args, level) unless node.type_args.empty?
-        result << ": (#{visit(node.args, level)})"
+        result << ": "
+        result << "#{visit(node.type_args, level)} " unless node.type_args.empty?
+        result << "(#{visit(node.args, level)})"
         result << " #{visit_arg(block_arg, level)}" if block_arg
         result << " -> #{return_type}"
       end

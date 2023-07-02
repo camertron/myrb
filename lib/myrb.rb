@@ -9,8 +9,8 @@ module Myrb
   autoload :Annotator,         'myrb/annotator'
   autoload :Arg,               'myrb/arg'
   autoload :Args,              'myrb/args'
-  autoload :AttrReader,        'myrb/ivar'
-  autoload :AttrWriter,        'myrb/ivar'
+  autoload :AttrReader,        'myrb/attr'
+  autoload :AttrWriter,        'myrb/attr'
   autoload :BaseLexer,         'myrb/base_lexer'
   autoload :ClassDef,          'myrb/class_def'
   autoload :DecorationVisitor, 'myrb/decoration_visitor'
@@ -21,6 +21,7 @@ module Myrb
   autoload :MethodDef,         'myrb/method_def'
   autoload :ModuleDef,         'myrb/module_def'
   autoload :Parser,            'myrb/parser'
+  autoload :Preprocessor,      'myrb/preprocessor'
   autoload :Processor,         'myrb/processor'
   autoload :Project,           'myrb/project'
   autoload :RBSVisitor,        'myrb/rbs_visitor'
@@ -30,7 +31,6 @@ module Myrb
   autoload :TopLevelScope,     'myrb/top_level_scope'
   autoload :TypeList,          'myrb/type_list'
   autoload :UnionType,         'myrb/union_type'
-
 
   # types
   autoload :ArrayType,         'myrb/types'
@@ -49,10 +49,6 @@ module Myrb
   class << self
     attr_accessor :debug
 
-    def default_annotations_path
-      @default_annotations_path ||= File.join('.', 'rbs')
-    end
-
     def debug?
       @debug || !!ENV['MYRB_DEBUG']
     end
@@ -66,3 +62,7 @@ module Myrb
     end
   end
 end
+
+require 'onload'
+
+Onload.register('.trb', Myrb::Preprocessor)

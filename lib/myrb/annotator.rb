@@ -44,29 +44,33 @@ module Myrb
     end
 
     def on_argument(node)
-      arg = case node.type
+      idx = case node.type
         when :restarg
-          find_rest_arg
+          find_rest_arg_idx
         else
           arg_name, value_node = *node
-          find_arg(arg_name.to_s)
+          find_arg_idx(arg_name.to_s)
       end
 
-      return nil unless arg
+      return nil unless idx
 
-      yield arg
+      yield arg_by_idx(idx), idx
     end
 
     def on_send(node)
       _, method_name, *args = *node
 
       if Lexer::ATTR_METHODS.include?(method_name.to_s) && args.size > 0 && args[0].type == :sym
-        ivar_name, = *args[0]
-        ivar = find_ivar(ivar_name.to_s)
-        return nil unless ivar
+        attr_name, = *args[0]
+        a = find_attr(attr_name.to_s)
+        return nil unless a
 
-        yield :ivar, ivar
+        yield :attr, a
       end
+    end
+
+    def arg_by_idx(idx)
+      current_method.args[idx]
     end
 
     private
@@ -97,19 +101,19 @@ module Myrb
       end
     end
 
-    def find_arg(name)
-      current_method.args.find do |arg|
+    def find_arg_idx(name)
+      current_method.args.index do |arg|
         arg.name == name
       end
     end
 
-    def find_rest_arg
-      current_method.args.find(&:naked_splat?)
+    def find_rest_arg_idx
+      current_method.args.index(&:naked_splat?)
     end
 
-    def find_ivar(name)
-      current_scope.ivars.find do |ivar|
-        ivar.name == name
+    def find_attr(name)
+      current_scope.attrs.find do |a|
+        a.name == name
       end
     end
 

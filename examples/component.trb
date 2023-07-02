@@ -1,14 +1,29 @@
 # frozen_string_literal: true
 
-module Foo::Bar
-  class TestComponent[K, V] < ViewComponent::Base
-    private attr_reader foobars: Array[Hash[String, Thing?]]
+module Foo
+  module Boo
+  end
+
+  module Biz
+  end
+
+  module Baz
+  end
+
+  class Thing
+  end
+
+  class TestComponent[K, V]
+    @title: Array[Numeric]
+    @thing: Hash[K, String | Numeric]
+
+    attr_accessor foobars: Array[Hash[String, Thing?]]
 
     prepend Boo
-    include Bar
+    include Biz
     extend Baz
 
-    def initialize(title: Array[Numeric] = foo('title'.upcase), thing: Hash[K, String | Numeric]) -> nil
+    def initialize(title: Array[Numeric] = foo('title'.upcase), thing: Hash[K, String | Numeric] = {}) -> void
       @title = title
       @thing = thing
     end
@@ -26,6 +41,7 @@ module Foo::Bar
     end
 
     private def render -> String
+      ""
     end
   end
 end

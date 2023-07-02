@@ -9,11 +9,17 @@ module Myrb
     end
 
     def on_module(node)
-      annotator.on_module(node) { super }
+      annotator.on_module(node) do |module_def|
+        handle_ivars(module_def)
+
+        super
+      end
     end
 
     def on_class(node)
       annotator.on_class(node) do |class_def|
+        handle_ivars(class_def)
+
         if class_def.type.has_args?
           remove(class_def.type.type_args.loc[:expression])
         end
@@ -24,6 +30,10 @@ module Myrb
 
     def on_def(node)
       annotator.on_def(node) do |method_def|
+        unless method_def.type_args.empty?
+          remove(rstrip(method_def.type_args.loc[:expression]))
+        end
+
         if return_type_loc = method_def.loc[:return_type]
           remove(return_type_loc)
         end
@@ -33,7 +43,7 @@ module Myrb
     end
 
     def on_argument(node)
-      annotator.on_argument(node) do |arg|
+      annotator.on_argument(node) do |arg, idx|
         if arg.kwarg?
           remove(
             if arg.default_value?
@@ -51,19 +61,19 @@ module Myrb
             end
           )
         elsif arg.naked_splat?
-          remove(
-            smart_strip(
-              if comma_loc = arg.loc[:trailing_comma]
-                arg.loc[:expression].with(end_pos: comma_loc.end_pos)
-              else
-                arg.loc[:expression]
-              end
-            )
-          )
+          remove(arg.loc[:expression])
         else
           # remove the type if present
           if colon_loc = arg.loc[:colon]
             remove(colon_loc.with(end_pos: arg.type.loc[:expression].end_pos))
+          end
+        end
+
+        next_arg = annotator.arg_by_idx(idx + 1)
+
+        if next_arg && next_arg.naked_splat?
+          if comma_loc = arg.loc[:trailing_comma]
+            remove(smart_strip(comma_loc))
           end
         end
 
@@ -99,8 +109,8 @@ module Myrb
     def on_send(node)
       annotator.on_send(node) do |send_type, annotation|
         case send_type
-          when :ivar
-            handle_ivar(annotation)
+          when :attr
+            handle_attr(annotation)
         end
       end
 
@@ -109,10 +119,16 @@ module Myrb
 
     private
 
-    def handle_ivar(ivar)
+    def handle_attr(ivar)
       # TODO: handle symbols with special characters
       replace(ivar.loc[:label], ":#{ivar.name}")
       remove(ivar.type.loc[:expression])
+    end
+
+    def handle_ivars(scope)
+      scope.ivars.each do |ivar|
+        remove(smart_strip(ivar.loc[:expression]))
+      end
     end
 
     def join_ranges(begin_range, end_range)

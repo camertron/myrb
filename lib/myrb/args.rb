@@ -48,6 +48,10 @@ module Myrb
       args.last
     end
 
+    def index(*splat, &block)
+      args.index(*splat, &block)
+    end
+
     def inspect(indent = 0)
       return super() if Myrb.debug?
       args.map { |arg| arg.inspect(indent) }.join(', ')

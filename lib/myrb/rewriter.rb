@@ -122,7 +122,7 @@ module Myrb
     def handle_attr(ivar)
       # TODO: handle symbols with special characters
       replace(ivar.loc[:label], ":#{ivar.name}")
-      remove(ivar.type.loc[:expression])
+      remove(ivar.type.loc[:expression]) rescue binding.irb
     end
 
     def handle_ivars(scope)

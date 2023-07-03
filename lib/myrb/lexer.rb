@@ -95,7 +95,15 @@ module Myrb
           mtd = handle_def(block)
           current_scope.method_defs << mtd
           push_scope(mtd)
+        when :kDO
+          consume(:kDO, block)
+          push_scope(BlockDef.instance)
+        when :kIF, :kUNLESS, :kWHILE, :kUNTIL, :kBEGIN  # TODO: are there more of these?
+          consume(type_of(current), block)
+          push_scope(Endable.new(current_scope))
         when :kEND
+          # TODO: if we encounter a kEND in the top-level scope, something went wrong.
+          # Let's raise an error instead of silently ignoring.
           pop_scope unless current_scope.top_level_scope?
           consume(:kEND, block)
         when :tIDENTIFIER
@@ -108,7 +116,7 @@ module Myrb
               end
             when *MIXIN_METHODS
               consume(:tIDENTIFIER, block)
-              const = handle_constant(block)
+              const, _ = handle_constant(block)
               current_scope.mixins << [ident.to_sym, const]
             else
               consume(type_of(current), block)
@@ -223,11 +231,13 @@ module Myrb
 
     def handle_module(block)
       consume(:kMODULE, block)
-      const = handle_constant(block)
+      const, _ = handle_constant(block)
       ModuleDef.new(const)
     end
 
     def handle_def(block)
+      @defining_method = true
+
       start_token = current
 
       consume(:kDEF, block)
@@ -251,16 +261,22 @@ module Myrb
 
       return_type = if type_of(current) == :tLAMBDA
         return_type_start_token = current
-        consume(:tLAMBDA)
+        consume(type_of(current))
 
         handle_types.tap do
           loc[:return_type] = pos_of(return_type_start_token).with(
             end_pos: pos_of(prev).end_pos
           )
+
+          if type_of(current) == :tNL
+            consume(:tNL, block)
+          end
         end
       else
         UntypedType.new
       end
+
+      @defining_method = false
 
       loc[:expression] = pos_of(start_token).with(
         end_pos: pos_of(prev).end_pos
@@ -331,7 +347,7 @@ module Myrb
             block.call([:tIDENTIFIER, [arg_name, pos_of(label)]]) if block
           end
 
-          block_arg ? handle_proc_type : handle_type
+          block_arg ? handle_proc_type : handle_types
         when :tIDENTIFIER
           arg_name = text_of(current)
           consume(:tIDENTIFIER, block)
@@ -449,22 +465,36 @@ module Myrb
         end
       end
 
-      if type_of(current) == :tIDENTIFIER && text_of(current) == 'untyped'
-        return UntypedType.new(pos_of(current)).tap do
-          consume(:tIDENTIFIER)
+      if type_of(current) == :tIDENTIFIER
+        case text_of(current)
+          when 'untyped'
+            return UntypedType.new(pos_of(current)).tap do
+              consume(:tIDENTIFIER)
+            end
+          when 'void'
+            return VoidType.new(pos_of(current)).tap do
+              consume(:tIDENTIFIER)
+            end
         end
       end
 
       start_token = current
-      const = handle_constant
+      const, nilable = handle_constant
       return nil unless const
 
       type_args = handle_type_args
+
+      if type_of(current) == :tEH
+        nilable = true
+        consume(:tEH)
+      end
+
       stop_token = prev
 
       Annotations.get_type(
         const,
-        type_args, {
+        type_args,
+        nilable, {
           constant: pos_of(start_token),
           expression: join_ranges(
             pos_of(start_token),
@@ -597,7 +627,7 @@ module Myrb
         pos_of(prev)
       )
 
-      Constant.new(loc, tokens, nilable)
+      [Constant.new(loc, tokens), nilable]
     end
 
     def join(tokens)
@@ -634,6 +664,20 @@ module Myrb
 
       block.call(current) if block
       @prev = current
+
+      end_pos = pos_of(current).end_pos
+
+      # Skip over stabby lambdas (i.e. "->") because they seem to put the lexer into
+      # a weird state that expects curly braces or do/end. If curly braces then appear
+      # in the body of, say, a method, the lexer hands back a :tLAMBEG token when it
+      # should return a tLBRACE token. We should only do this however if we're expecting
+      # a "->" to indicate a return type, which is the only time Myrb uses it.
+      if @defining_method && @source_buffer.source.index(/\s*(->)/, end_pos) == end_pos
+        @current = [:tLAMBDA, ["->", make_range(*Regexp.last_match.offset(1))]]
+        @lexer.reset_to(pos_of(current).end_pos)
+        return current
+      end
+
       @current = get_next
     end
 

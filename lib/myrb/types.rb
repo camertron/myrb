@@ -2,15 +2,12 @@
 
 module Myrb
   class Constant < Annotation
-    attr_reader :loc, :tokens, :nilable
+    attr_reader :loc, :tokens
 
-    def initialize(loc, tokens, nilable = false)
+    def initialize(loc, tokens)
       @loc = loc
       @tokens = tokens
-      @nilable = nilable
     end
-
-    alias nilable? nilable
 
     def to_ruby
       @ruby ||= tokens.map { |_, (text, _)| text }.join
@@ -18,7 +15,7 @@ module Myrb
 
     def inspect
       return super() if Myrb.debug?
-      to_ruby + (nilable? ? '?' : '')
+      to_ruby
     end
 
     def accept(visitor, level)
@@ -28,13 +25,18 @@ module Myrb
 
 
   class Type < Annotation
-    attr_reader :const, :loc, :type_args
+    attr_reader :const, :loc, :type_args, :nilable
 
-    def initialize(const, loc = nil, type_args = nil)
+    alias nilable? nilable
+
+    def initialize(const, loc = nil, type_args = nil, nilable = false)
       @const = const
       @loc = loc
       @type_args = type_args
+      @nilable = nilable
     end
+
+    alias nilable? nilable
 
     def to_ruby
       const.to_ruby
@@ -50,6 +52,7 @@ module Myrb
       return super() if Myrb.debug?
       const.inspect.tap do |result|
         result << type_args.inspect unless type_args.empty?
+        result << "?" if nilable?
       end
     end
 
@@ -130,6 +133,23 @@ module Myrb
   end
 
 
+  class VoidType < Annotation
+    attr_reader :loc
+
+    def initialize(loc = {})
+      @loc = loc
+    end
+
+    def accept(visitor, level)
+      visitor.visit_void_type(self, level)
+    end
+
+    def inspect
+      'void'
+    end
+  end
+
+
   class ProcType < Annotation
     attr_reader :loc, :args, :return_type
 
@@ -185,185 +205,14 @@ module Myrb
   end
 
 
-  class ArrayType < Annotation
-    attr_reader :const, :loc, :type_args
-
-    def initialize(const, loc, type_args)
-      @const = const
-      @loc = loc
-      @type_args = type_args
-    end
-
-    def elem_type
-      type_args.args.first
-    end
-
-    def sig
-      "T::Array[#{elem_type.sig}]"
-    end
-
-    def inspect(indent = 0)
-      return super() if Myrb.debug?
-      "Array[#{elem_type.inspect}]"
-    end
-
-    def accept(visitor, level)
-      visitor.visit_array_type(self, level)
-    end
-  end
-
-
-  class SetType < Annotation
-    attr_reader :const, :loc, :type_args
-
-    def initialize(const, loc, type_args)
-      @const = const
-      @loc = loc
-      @type_args = type_args
-    end
-
-    def elem_type
-      type_args.args.first
-    end
-
-    def sig
-      "T::Set[#{elem_type.sig}]"
-    end
-
-    def inspect(indent = 0)
-      return super() if Myrb.debug?
-      "Set[#{elem_type.inspect}]"
-    end
-
-    def accept(visitor, level)
-      visitor.visit_set_type(self, level)
-    end
-  end
-
-
-  class HashType < Annotation
-    attr_reader :const, :loc, :type_args
-
-    def initialize(const, loc, type_args)
-      @const = const
-      @loc = loc
-      @type_args = type_args
-    end
-
-    def key_type
-      type_args.args.first
-    end
-
-    def value_type
-      type_args.args.last
-    end
-
-    def sig
-      "T::Hash[#{key_type.sig}, #{value_type.sig}]"
-    end
-
-    def inspect(indent = 0)
-      return super() if Myrb.debug?
-      "Hash[#{key_type.inspect}, #{value_type.inspect}]"
-    end
-
-    def accept(visitor, level)
-      visitor.visit_hash_type(self, level)
-    end
-  end
-
-
-  class RangeType < Annotation
-    attr_reader :const, :loc, :type_args
-
-    def initialize(type_args)
-      @const = const
-      @loc = loc
-      @type_args = type_args
-    end
-
-    def elem_type
-      type_args.first
-    end
-
-    def sig
-      "T::Range[#{elem_type.sig}]"
-    end
-
-    def inspect(indent = 0)
-      return super() if Myrb.debug?
-      "Range[#{elem_type.inspect}]"
-    end
-
-    def accept(visitor, level)
-      visitor.visit_range_type(self, level)
-    end
-  end
-
-
-  class EnumerableType < Annotation
-    attr_reader :const, :loc, :type_args
-
-    def initialize(const, loc, type_args)
-      @const = const
-      @loc = loc
-      @type_args = type_args
-    end
-
-    def elem_type
-      type_args.first
-    end
-
-    def sig
-      "T::Enumerable[#{elem_type.sig}]"
-    end
-
-    def inspect(indent = 0)
-      return super() if Myrb.debug?
-      "Enumerable[#{elem_type.inspect}]"
-    end
-
-    def accept(visitor, level)
-      visitor.visit_enumerable_type(self, level)
-    end
-  end
-
-
-  class EnumeratorType < Annotation
-    attr_reader :const, :loc, :type_args
-
-    def initialize(loc, type_args)
-      @const = const
-      @loc = loc
-      @type_args = type_args
-    end
-
-    def elem_type
-      type_args.first
-    end
-
-    def sig
-      "T::Enumerator[#{elem_type.sig}]"
-    end
-
-    def inspect(indent = 0)
-      return super() if Myrb.debug?
-      "Enumerator[#{elem_type.inspect}]"
-    end
-
-    def accept(visitor, level)
-      visitor.visit_enumerator_type(self, level)
-    end
-  end
-
-
   class ClassOf < Annotation
-    attr_reader :loc, :type_args
+    attr_reader :const, :loc, :type_args, :nilable
 
-    def initialize(const, loc, type_args)
+    def initialize(const, loc, type_args, nilable)
       @const = const
       @loc = loc
       @type_args = type_args
+      @nilable = nilable
     end
 
     def type
@@ -386,11 +235,14 @@ module Myrb
 
 
   class SelfType
-    attr_reader :const, :loc
+    attr_reader :const, :loc, :nilable
 
-    def initialize(const, loc)
+    alias nilable? nilable
+
+    def initialize(const, loc, nilable)
       @const = const
       @loc = loc
+      @nilable = nilable
     end
 
     def sig

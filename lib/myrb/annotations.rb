@@ -7,11 +7,11 @@ module Myrb
         registered_type_classes[const] = type_klass
       end
 
-      def get_type(const, type_args, loc)
+      def get_type(const, type_args, nilable, loc)
         if type_klass = registered_type_classes[const.to_ruby]
-          type_klass.new(const, loc, type_args)
+          type_klass.new(const, loc, type_args, nilable)
         else
-          Type.new(const, loc, type_args)
+          Type.new(const, loc, type_args, nilable)
         end
       end
 
@@ -23,13 +23,7 @@ module Myrb
     end
 
 
-    register_type_class("Array", ArrayType)
     register_type_class("ClassOf", ClassOf)
-    register_type_class("Enumerable", EnumerableType)
-    register_type_class("Enumerator", EnumeratorType)
-    register_type_class("Hash", HashType)
-    register_type_class("Range", RangeType)
-    register_type_class("Set", SetType)
     register_type_class("SelfType", SelfType)
   end
 end

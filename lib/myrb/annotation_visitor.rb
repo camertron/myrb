@@ -44,24 +44,6 @@ module Myrb
     def visit_proc_type(node, level)
     end
 
-    def visit_array_type(node, level)
-    end
-
-    def visit_set_type(node, level)
-    end
-
-    def visit_hash_type(node, level)
-    end
-
-    def visit_range_type(node, level)
-    end
-
-    def visit_enumerable_type(node, level)
-    end
-
-    def visit_enumerator_type(node, level)
-    end
-
     def visit_class_of(node, level)
     end
 
@@ -75,6 +57,9 @@ module Myrb
     end
 
     def visit_untyped_type(node, level)
+    end
+
+    def visit_void_type(node, level)
     end
 
     private

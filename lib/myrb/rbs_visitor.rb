@@ -27,19 +27,8 @@ module Myrb
 
     def visit_class_def(node, level)
       (+'').tap do |result|
-        type_args = if node.type.has_args?
-          (+'[').tap do |ta|
-            node.type.type_args.map.with_index do |type_arg, idx|
-              ta << ', ' if idx > 0
-              ta << "#{visit(type_arg, level)}"
-            end
-
-            ta << ']'
-          end
-        end
-
         super_class = node.super_type ? " < #{visit(node.super_type, level)}" : ''
-        result << indent("class #{visit(node.type, level)}#{type_args}#{super_class}\n", level)
+        result << indent("class #{visit(node.type, level)}#{super_class}\n", level)
 
         lines = []
 
@@ -137,37 +126,18 @@ module Myrb
     end
 
     def visit_constant(node, level)
-      str = node.tokens.map { |_, (text, _)| text }.join
-      str << (node.nilable? ? '?' : '')
-      str
+      node.tokens.map { |_, (text, _)| text }.join
     end
 
     def visit_type(node, level)
-      visit(node.const, level)
+      result = visit(node.const, level)
+      result << visit(node.type_args, level) unless node.type_args.empty?
+      result << "?" if node.nilable?
+      result
     end
 
     def visit_proc_type(node, level)
       "{ (#{visit(node.args, level)}) -> #{visit(node.return_type, level)} }"
-    end
-
-    def visit_array_type(node, level)
-      "Array[#{visit(node.elem_type, level)}]"
-    end
-
-    def visit_set_type(node, level)
-    end
-
-    def visit_hash_type(node, level)
-      "Hash[#{visit(node.key_type, level)}, #{visit(node.value_type, level)}]"
-    end
-
-    def visit_range_type(node, level)
-    end
-
-    def visit_enumerable_type(node, level)
-    end
-
-    def visit_enumerator_type(node, level)
     end
 
     def visit_class_of(node, level)
@@ -186,6 +156,10 @@ module Myrb
 
     def visit_untyped_type(node, level)
       'untyped'
+    end
+
+    def visit_void_type(node, level)
+      'void'
     end
   end
 end

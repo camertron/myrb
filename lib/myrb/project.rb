@@ -18,16 +18,45 @@ module Myrb
       AnnotatedFile.new(absolute_path, self)
     end
 
-    def each_file
-      return to_enum(__method__) unless block_given?
+    def each_file(&block)
+      each_file_in(files, &block)
+    end
 
-      Dir.glob(File.join(root_path, "**", "*.trb")).each do |path|
-        yield AnnotatedFile.new(path, self)
+    def transpile_all(&block)
+      file_list = files
+      total = file_list.size
+
+      each_file_in(file_list).with_index do |file, idx|
+        unless cache.contains?(file.path)
+          file.write_rbs
+          file.write_rewritten_source
+          cache.store(file.path)
+        end
+
+        yield(idx + 1, total) if block
       end
     end
 
     def sig_path
       @sig_path ||= File.join(root_path, 'sig')
+    end
+
+    private
+
+    def each_file_in(file_list)
+      return to_enum(__method__, file_list) unless block_given?
+
+      file_list.each do |path|
+        yield AnnotatedFile.new(path, self)
+      end
+    end
+
+    def files
+      Dir.glob(File.join(root_path, "**", "*.trb"))
+    end
+
+    def cache
+      @cache ||= ProjectCache.new(File.join(sig_path, ".cache.yml"))
     end
   end
 end

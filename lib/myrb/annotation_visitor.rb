@@ -38,6 +38,9 @@ module Myrb
     def visit_constant(node, level)
     end
 
+    def visit_interface(node, level)
+    end
+
     def visit_type(node, level)
     end
 
@@ -60,6 +63,9 @@ module Myrb
     end
 
     def visit_void_type(node, level)
+    end
+
+    def visit_bool_type(node, level)
     end
 
     private

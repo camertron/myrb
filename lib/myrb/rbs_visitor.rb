@@ -26,41 +26,16 @@ module Myrb
     end
 
     def visit_class_def(node, level)
-      (+'').tap do |result|
-        super_class = node.super_type ? " < #{visit(node.super_type, level)}" : ''
-        result << indent("class #{visit(node.type, level)}#{super_class}\n", level)
-
-        lines = []
-
-        unless node.mixins.empty?
-          lines << node.mixins.map do |kind, const|
-            indent("#{kind} #{visit(const, level)}", level + 1)
-          end.join("\n")
-        end
-
-        unless node.attrs.empty?
-          lines << node.attrs.map { |a| visit(a, level + 1) }.join("\n")
-        end
-
-        unless node.ivars.empty?
-          lines << node.ivars.map { |ivar| visit(ivar, level + 1) }.join("\n")
-        end
-
-        lines += node.method_defs.flat_map do |mtd|
-          visit(mtd, level + 1)
-        end
-
-        unless node.scopes.empty?
-          lines << scopes.map { |scp| visit(scp, level + 1) }.join("\n")
-        end
-
-        result << lines.join("\n")
-        result << indent("\nend\n", level)
+      if node.singleton?
+        handle_singleton_class_def(node, level)
+      else
+        handle_class_def(node, level)
       end
     end
 
     def visit_ivar(node, level)
-      indent("#{node.name}: #{visit(node.type, level)}", level)
+      receiver = node.parent_scope.singleton? ? "self." : ""
+      indent("#{receiver}#{node.name}: #{visit(node.type, level)}", level)
     end
 
     def visit_attr(node, level)
@@ -89,8 +64,9 @@ module Myrb
         end
 
         block_arg = node.args.block_arg
+        receiver = node.parent_scope.singleton? ? "self." : ""
 
-        result << indent("def #{node.name}", level)
+        result << indent("def #{receiver}#{node.name}", level)
         result << ": "
         result << "#{visit(node.type_args, level)} " unless node.type_args.empty?
         result << "(#{visit(node.args, level)})"
@@ -103,7 +79,7 @@ module Myrb
       (+'').tap do |result|
         result << indent("module #{visit(node.type, level)}\n", level)
         result << visit_scope(node, level + 1)
-        result << indent("end\n", level)
+        result << indent("\nend\n", level)
       end
     end
 
@@ -111,6 +87,7 @@ module Myrb
       lines = [node.mixins.map      { |kind, const| indent("#{kind} #{visit(const)}", level) }.join("\n")]
       lines << node.scopes.map      { |scp| visit(scp, level) }.join("\n")
       lines << node.method_defs.map { |mtd| visit(mtd, level) }.join("\n")
+      lines << node.interfaces.map  { |iface| visit(iface, level) }.join("\n")
 
       lines.reject(&:empty?).join("\n\n")
     end
@@ -126,7 +103,14 @@ module Myrb
     end
 
     def visit_constant(node, level)
-      node.tokens.map { |_, (text, _)| text }.join
+      node.name
+    end
+
+    def visit_interface(node, level)
+      lines = node.definition.split("\n")
+      ws = lines[-1].match(/\A\s*/)[0]
+      lines.map! { |line| line.start_with?(ws) ? line[ws.size..-1] : line }
+      indent(lines.join("\n"), level)
     end
 
     def visit_type(node, level)
@@ -160,6 +144,55 @@ module Myrb
 
     def visit_void_type(node, level)
       'void'
+    end
+
+    def visit_bool_type(node, level)
+      'bool'
+    end
+
+    private
+
+    def handle_class_def(node, level)
+      (+'').tap do |result|
+        super_class = node.super_type ? " < #{visit(node.super_type, level)}" : ''
+        result << indent("class #{visit(node.type, level)}#{super_class}\n", level)
+        result << handle_class_body(node, level + 1)
+        result << indent("end\n", level)
+      end
+    end
+
+    def handle_singleton_class_def(node, level)
+      handle_class_body(node, level)
+    end
+
+    def handle_class_body(node, level)
+      lines = []
+
+      unless node.mixins.empty?
+        lines << node.mixins.map do |kind, const|
+          indent("#{kind} #{visit(const, level)}", level)
+        end.join("\n")
+      end
+
+      unless node.attrs.empty?
+        lines << node.attrs.map { |a| visit(a, level) }.join("\n")
+      end
+
+      unless node.ivars.empty?
+        lines << node.ivars.map { |ivar| visit(ivar, level) }.join("\n")
+      end
+
+      lines += node.method_defs.flat_map do |mtd|
+        visit(mtd, level)
+      end
+
+      unless node.scopes.empty?
+        lines << scopes.map { |scp| visit(scp, level) }.join("\n")
+      end
+
+      lines << ""
+
+      lines.join("\n")
     end
   end
 end

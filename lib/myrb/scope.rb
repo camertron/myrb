@@ -2,7 +2,7 @@
 
 module Myrb
   class Scope < Annotation
-    attr_reader :type, :method_defs, :scopes, :attrs, :ivars, :mixins
+    attr_reader :type, :method_defs, :scopes, :attrs, :ivars, :mixins, :interfaces
 
     def initialize(type)
       @type = type
@@ -11,20 +11,13 @@ module Myrb
       @attrs = []
       @ivars = []
       @mixins = []
+      @interfaces = []
     end
 
     def to_rbi(level)
       lines = [mixins.map   { |kind, const| indent("#{kind} #{const.to_ruby}", level) }.join("\n")]
       lines << scopes.map   { |scp| scp.to_rbi(level) }.join("\n")
       lines << method_defs.map  { |mtd| mtd.to_rbi(level) }.join("\n")
-
-      lines.reject(&:empty?).join("\n\n")
-    end
-
-    def to_rbs(level)
-      lines = [mixins.map   { |kind, const| indent("#{kind} #{const.to_ruby}", level) }.join("\n")]
-      lines << scopes.map   { |scp| scp.to_rbs(level) }.join("\n")
-      lines << method_defs.map  { |mtd| mtd.to_rbs(level) }.join("\n")
 
       lines.reject(&:empty?).join("\n\n")
     end

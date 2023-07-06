@@ -2,15 +2,21 @@
 
 module Myrb
   class Constant < Annotation
-    attr_reader :loc, :tokens
+    attr_reader :name, :loc, :tokens
 
-    def initialize(loc, tokens)
+    def self.from_tokens(loc, tokens)
+      name = tokens.map { |_, (text, _)| text }.join
+      new(name, loc, tokens)
+    end
+
+    def initialize(name, loc = nil, tokens = nil)
+      @name = name
       @loc = loc
       @tokens = tokens
     end
 
     def to_ruby
-      @ruby ||= tokens.map { |_, (text, _)| text }.join
+      name
     end
 
     def inspect
@@ -29,7 +35,7 @@ module Myrb
 
     alias nilable? nilable
 
-    def initialize(const, loc = nil, type_args = nil, nilable = false)
+    def initialize(const, loc = nil, type_args = TypeArgs.empty, nilable = false)
       @const = const
       @loc = loc
       @type_args = type_args
@@ -70,6 +76,10 @@ module Myrb
     include Enumerable
 
     attr_reader :loc, :args
+
+    def self.empty
+      new(nil, [])
+    end
 
     def initialize(loc, args)
       @loc = loc
@@ -146,6 +156,23 @@ module Myrb
 
     def inspect
       'void'
+    end
+  end
+
+
+  class BoolType < Annotation
+    attr_reader :loc
+
+    def initialize(loc = {})
+      @loc = loc
+    end
+
+    def accept(visitor, level)
+      visitor.visit_bool_type(self, level)
+    end
+
+    def inspect
+      'bool'
     end
   end
 

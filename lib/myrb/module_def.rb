@@ -18,5 +18,17 @@ module Myrb
       return super() if Myrb.debug?
       type.to_ruby
     end
+
+    def singleton_class_def
+      @singleton_class_def ||= SingletonClassDef.new(self)
+    end
+
+    def has_singleton_class?
+      @singleton_class_def != nil
+    end
+
+    def singleton?
+      false
+    end
   end
 end

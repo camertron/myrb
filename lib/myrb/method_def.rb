@@ -2,10 +2,11 @@
 
 module Myrb
   class MethodDef < Annotation
-    attr_reader :name, :type_args, :args, :return_type, :loc, :method_defs
+    attr_reader :name, :parent_scope, :type_args, :args, :return_type, :loc, :method_defs
 
-    def initialize(name, type_args, args, return_type, loc)
+    def initialize(name, parent_scope, type_args, args, return_type, loc)
       @name = name
+      @parent_scope = parent_scope
       @type_args = type_args
       @args = args
       @return_type = return_type

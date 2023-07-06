@@ -69,6 +69,17 @@ module Myrb
       end
     end
 
+    def on_sclass(node)
+      if current_scope.has_singleton_class?
+        sclass = current_scope.singleton_class_def
+        scope_stack.push(sclass)
+
+        yield(sclass).tap do
+          scope_stack.pop
+        end
+      end
+    end
+
     def arg_by_idx(idx)
       current_method.args[idx]
     end

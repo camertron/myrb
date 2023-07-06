@@ -4,6 +4,7 @@ module Myrb
   class Lexer < LexerInterface
     class UnexpectedTokenError < StandardError; end
     class CouldNotParseArgDefaultValueError < StandardError; end
+    class SingletonClassError < StandardError; end
 
     include Annotations
     include TokenHelpers
@@ -98,7 +99,7 @@ module Myrb
         when :kDO
           consume(:kDO, block)
           push_scope(BlockDef.instance)
-        when :kIF, :kUNLESS, :kWHILE, :kUNTIL, :kBEGIN  # TODO: are there more of these?
+        when :kIF, :kUNLESS, :kWHILE, :kUNTIL, :kBEGIN, :kCASE  # TODO: are there more of these?
           consume(type_of(current), block)
           push_scope(Endable.new(current_scope))
         when :kEND
@@ -118,6 +119,10 @@ module Myrb
               consume(:tIDENTIFIER, block)
               const, _ = handle_constant(block)
               current_scope.mixins << [ident.to_sym, const]
+            when "interface"
+              if (iface = maybe_handle_interface(block))
+                current_scope.interfaces << iface
+              end
             else
               consume(type_of(current), block)
           end
@@ -143,6 +148,38 @@ module Myrb
       end
     end
 
+    def maybe_handle_interface(block)
+      iface_token = current
+      consume(:tIDENTIFIER)
+
+      name = text_of(current)
+
+      if interface_name?(name)
+        stop_idx = source_buffer.source.index("end", pos_of(iface_token).begin_pos) + 3
+
+        if stop_idx
+          definition = source_buffer.source[pos_of(iface_token).begin_pos...stop_idx]
+          loc = { expression: pos_of(iface_token).with(end_pos: stop_idx) }
+
+          return Interface.new(name, definition, loc).tap do
+            @lexer.reset_to(stop_idx)
+            consume(type_of(current))
+
+            if type_of(current) == :tNL
+              consume(:tNL)
+            end
+          end
+        end
+      end
+
+      block.call(iface_token)
+      nil
+    end
+
+    def interface_name?(str)
+      str =~ /\A_[A-Z]\w*\z/
+    end
+
     def handle_ivar_decl(name_token)
       type = handle_types
       loc = {
@@ -150,7 +187,7 @@ module Myrb
         name: pos_of(name_token)
       }
 
-      IVar.new(text_of(name_token), type, loc)
+      IVar.new(text_of(name_token), current_scope, type, loc)
     end
 
     # @TODO: handle list of attrs, eg. attr_reader foo: String, bar: String
@@ -210,6 +247,12 @@ module Myrb
 
     def handle_class(block)
       consume(:kCLASS, block)
+
+      # opening a singleton class
+      if type_of(current) == :tLSHFT
+        return handle_singleton_class(block)
+      end
+
       class_type = handle_types
       yield_all(class_type.const.tokens, block)
 
@@ -227,6 +270,17 @@ module Myrb
       end
 
       ClassDef.new(class_type, super_type)
+    end
+
+    def handle_singleton_class(block)
+      consume(:tLSHFT, block)
+
+      if type_of(current) != :kSELF
+        raise SingletonClassError, "Myrb does not yet support singleton classes on anything but self"
+      end
+
+      consume(:kSELF, block)
+      current_scope.singleton_class_def
     end
 
     def handle_module(block)
@@ -268,8 +322,13 @@ module Myrb
             end_pos: pos_of(prev).end_pos
           )
 
-          if type_of(current) == :tNL
-            consume(:tNL, block)
+          # If the method body starts with a reference to an instance variable,
+          # the lexer for some reason does not emit a newline. This causes the
+          # parser to choke, since it thinks the instance variable is part of
+          # the argument list. We will likely have to re-evaluate this approach
+          # for single-line methods.
+          if type_of(current) != :tNL
+            block.call([:tNL, [nil, nil]])
           end
         end
       else
@@ -284,6 +343,7 @@ module Myrb
 
       MethodDef.new(
         method_name,
+        current_scope,
         type_args,
         args || Args.new([]),
         return_type,
@@ -475,6 +535,10 @@ module Myrb
             return VoidType.new(pos_of(current)).tap do
               consume(:tIDENTIFIER)
             end
+          when 'bool'
+            return BoolType.new(pos_of(current)).tap do
+              consume(:tIDENTIFIER)
+            end
         end
       end
 
@@ -593,6 +657,10 @@ module Myrb
     end
 
     def handle_constant(block = nil)
+      if (iface_const = maybe_handle_interface_constant)
+        return iface_const
+      end
+
       return nil unless const_token?(current)
 
       nilable = false
@@ -627,7 +695,37 @@ module Myrb
         pos_of(prev)
       )
 
-      [Constant.new(loc, tokens), nilable]
+      [Constant.from_tokens(loc, tokens), nilable]
+    end
+
+    def maybe_handle_interface_constant
+      type = type_of(current)
+      name = text_of(current)
+      pos = pos_of(current)
+      nilable = false
+
+      case type
+        when :tIDENTIFIER
+        when :tFID
+          name = name.chomp("?")
+          pos = pos.adjust(end_pos: -1)
+          nilable = true
+        else
+          return
+      end
+
+      return unless interface_name?(name)
+
+      loc = {
+        constant: pos,
+        expression: pos_of(current)
+      }
+
+      tokens = [[:tIDENTIFIER, [name, pos]]]
+
+      [Constant.from_tokens(loc, tokens), nilable].tap do
+        consume(type)
+      end
     end
 
     def join(tokens)

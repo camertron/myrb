@@ -7,7 +7,7 @@ module Myrb
   class AnnotatedFile < AnnotatedSource
     attr_reader :path, :project
 
-    def initialize(path, project = nil)
+    def initialize(path, project)
       @path = path
       @project = project
     end
@@ -37,8 +37,6 @@ module Myrb
     private
 
     def rbs_path
-      return nil unless project
-
       @rbs_path ||= begin
         relative_path = Pathname(path)
           .relative_path_from(project.root_path)

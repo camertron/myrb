@@ -14,10 +14,6 @@ module Myrb
       indent("#{sig}\n#{kind} #{name}", level)
     end
 
-    def to_rbs(level)
-      indent("#{name}: #{type.sig}", level)
-    end
-
     def accept(visitor, level)
       visitor.visit_attr(self, level)
     end

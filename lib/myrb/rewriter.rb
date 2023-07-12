@@ -83,6 +83,7 @@ module Myrb
     def handle_module_def(module_def)
       handle_ivars(module_def)
       handle_interfaces(module_def)
+      handle_type_aliases(module_def)
 
       if module_def.has_singleton_class?
         handle_class_def(module_def.singleton_class_def)
@@ -145,7 +146,7 @@ module Myrb
     def handle_attr(ivar)
       # TODO: handle symbols with special characters
       replace(ivar.loc[:label], ":#{ivar.name}")
-      remove(ivar.type.loc[:expression]) rescue binding.irb
+      remove(ivar.type.loc[:expression])
     end
 
     def handle_ivars(scope)
@@ -157,6 +158,12 @@ module Myrb
     def handle_interfaces(scope)
       scope.interfaces.each do |iface|
         remove(smart_strip(iface.loc[:expression]))
+      end
+    end
+
+    def handle_type_aliases(scope)
+      scope.type_aliases.each do |type_alias|
+        remove(smart_strip(type_alias.loc[:expression]))
       end
     end
 

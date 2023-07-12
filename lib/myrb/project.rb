@@ -19,12 +19,15 @@ module Myrb
     end
 
     def each_file(&block)
-      each_file_in(files, &block)
+      each_file_in(paths, &block)
+    end
+
+    def paths
+      Dir.glob(File.join(root_path, "**", "*.trb"))
     end
 
     def transpile_all(&block)
-      file_list = files
-      total = file_list.size
+      file_list = paths
 
       each_file_in(file_list).with_index do |file, idx|
         unless cache.contains?(file.path)
@@ -33,7 +36,7 @@ module Myrb
           cache.store(file.path)
         end
 
-        yield(idx + 1, total) if block
+        yield(idx) if block
       end
     end
 
@@ -49,10 +52,6 @@ module Myrb
       file_list.each do |path|
         yield AnnotatedFile.new(path, self)
       end
-    end
-
-    def files
-      Dir.glob(File.join(root_path, "**", "*.trb"))
     end
 
     def cache

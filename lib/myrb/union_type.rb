@@ -2,11 +2,14 @@
 
 module Myrb
   class UnionType < Annotation
-    attr_reader :types, :loc
+    attr_reader :types, :loc, :nilable
 
-    def initialize(types, loc)
+    alias nilable? nilable
+
+    def initialize(types, loc, nilable)
       @types = types
       @loc = loc
+      @nilable = nilable
     end
 
     def sig
@@ -19,7 +22,13 @@ module Myrb
 
     def inspect(indent = 0)
       return super() if Myrb.debug?
-      types.map(&:inspect).join(' | ')
+      result = types.map(&:inspect).join(' | ')
+
+      if nilable?
+        result = "(#{result})?"
+      end
+
+      result
     end
   end
 end

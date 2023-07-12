@@ -123,6 +123,10 @@ module Myrb
               if (iface = maybe_handle_interface(block))
                 current_scope.interfaces << iface
               end
+            when "type"
+              if (type_alias = maybe_handle_type_alias(block))
+                current_scope.type_aliases << type_alias
+              end
             else
               consume(type_of(current), block)
           end
@@ -146,6 +150,50 @@ module Myrb
         else
           consume(type_of(current), block)
       end
+    end
+
+    def maybe_handle_type_alias(block)
+      tokens = [current]
+      consume(:tIDENTIFIER)
+
+      if type_of(current) == :tIDENTIFIER
+        tokens << current
+        consume(:tIDENTIFIER)
+
+        if type_of(current) == :tEQL
+          tokens << current
+          consume(:tEQL)
+
+          first_loc = pos_of(tokens.first)
+          rbs_alias = RBSParser.parse(@lexer.source_buffer, first_loc.begin_pos)
+
+          if rbs_alias
+            loc = {
+              expression: first_loc.with(
+                end_pos: first_loc.begin_pos + rbs_alias.location.end_pos
+              )
+            }
+
+            @lexer.reset_to(loc[:expression].end_pos)
+            consume(type_of(current))
+
+            if type_of(current) == :tNL
+              consume(:tNL)
+            end
+
+            return TypeAlias.new(
+              text_of(tokens[1]),
+              loc[:expression].source,
+              loc
+            )
+          end
+        end
+      end
+
+      # this wasn't a type alias, so yield all tokens
+      tokens.each { |t| block.call(t) }
+
+      nil
     end
 
     def maybe_handle_interface(block)
@@ -407,13 +455,18 @@ module Myrb
             block.call([:tIDENTIFIER, [arg_name, pos_of(label)]]) if block
           end
 
-          block_arg ? handle_proc_type : handle_types
+          block_arg ? handle_block_type : handle_types
         when :tIDENTIFIER
           arg_name = text_of(current)
           consume(:tIDENTIFIER, block)
           UntypedType.new
         else
-          UntypedType.new
+          # so-called "naked" splats, i.e. "*" by itself, are allowed and indicate the
+          # end of positional arguments
+          unless splat
+            pos = pos_of(current)
+            raise UnexpectedTokenError, "expected a label or identifier when parsing arguments on line #{pos.line} column #{pos.column}"
+          end
       end
 
       default_value_tokens = if type_of(current) == :tEQL
@@ -455,16 +508,16 @@ module Myrb
     end
 
     def handle_arg_default_value(block)
-      result = ExpressionParser.parse(@source_buffer, pos_of(current).begin_pos)
+      range = ExpressionBoundary.find(@source_buffer, pos_of(current).begin_pos)
 
-      unless result
+      unless range
         pos = pos_of(current)
         raise CouldNotParseArgDefaultValueError, "the arg default on line #{pos.line} column #{pos.column} could not be parsed"
       end
 
       [].tap do |tokens|
         loop do
-          break if pos_of(current).end_pos > result.loc.expression.end_pos
+          break if pos_of(current).end_pos > range.last
 
           tokens << current
           consume(type_of(current), block)
@@ -475,14 +528,14 @@ module Myrb
     def handle_types
       wrapped_in_parens = false
       start_token = current
+      nilable = false
 
-      if type_of(current) == :tLPAREN2
-        consume(:tLPAREN2)
-        wrapped_in_parens = true
-      end
-
-      if type_of(current) == :tLBRACK
-        return handle_type_list
+      case type_of(current)
+        when :tLPAREN2, :tLPAREN
+          consume(type_of(current))
+          wrapped_in_parens = true
+        when :tLBRACK
+          return handle_type_list
       end
 
       types = [].tap do |types|
@@ -499,6 +552,11 @@ module Myrb
 
       consume(:tRPAREN) if wrapped_in_parens
 
+      if type_of(current) == :tEH
+        nilable = true
+        consume(:tEH)
+      end
+
       stop_token = prev
 
       # TODO: handle intersection types as well, maybe joined with a + or & char?
@@ -510,7 +568,7 @@ module Myrb
           )
         }
 
-        UnionType.new(types, loc)
+        UnionType.new(types, loc, nilable)
       elsif types.size == 1
         types.first
       else
@@ -519,27 +577,31 @@ module Myrb
     end
 
     def handle_type
-      if type_of(current) == :kNIL
-        return NilType.new(pos_of(current)).tap do
-          consume(:kNIL)
-        end
-      end
+      case type_of(current)
+        when :kNIL
+          return NilType.new(pos_of(current)).tap do
+            consume(:kNIL)
+          end
+        when :tIDENTIFIER
+          cls = case text_of(current)
+            when 'untyped' then UntypedType
+            when 'void'    then VoidType
+            when 'bool'    then BoolType
+          end
 
-      if type_of(current) == :tIDENTIFIER
-        case text_of(current)
-          when 'untyped'
-            return UntypedType.new(pos_of(current)).tap do
+          if cls
+            loc = {
+              expression: pos_of(current)
+            }
+
+            return cls.new(loc).tap do
               consume(:tIDENTIFIER)
             end
-          when 'void'
-            return VoidType.new(pos_of(current)).tap do
-              consume(:tIDENTIFIER)
-            end
-          when 'bool'
-            return BoolType.new(pos_of(current)).tap do
-              consume(:tIDENTIFIER)
-            end
-        end
+          end
+        when :tLBRACE
+          return handle_block_type
+        when :tCARET
+          return handle_proc_type
       end
 
       start_token = current
@@ -596,7 +658,7 @@ module Myrb
       TypeArgs.new(loc, type_args)
     end
 
-    def handle_proc_type
+    def handle_block_type
       loc = {
         open_curly: pos_of(current)
       }
@@ -621,10 +683,32 @@ module Myrb
 
       loc[:expression] = loc[:open_curly].with(end_pos: loc[:close_curly].end_pos)
 
+      BlockType.new(loc, args, return_type)
+    end
+
+    def handle_proc_type
+      @defining_method = true
+
+      start_token = current
+
+      consume(:tCARET)
+      consume(:tLPAREN)
+
+      args = handle_args
+
+      consume(:tRPAREN)
+      consume(:tLAMBDA)
+
+      return_type = handle_type
+      loc = {
+        expression: pos_of(start_token).with(end_pos: pos_of(prev).end_pos)
+      }
+
+      @defining_method = false
+
       ProcType.new(loc, args, return_type)
     end
 
-    # is this used anymore??
     def handle_type_list
       start_token = current
       consume(:tLBRACK)
@@ -661,20 +745,21 @@ module Myrb
         return iface_const
       end
 
-      return nil unless const_token?(current)
-
       nilable = false
       loc = {}
 
       tokens = [].tap do |const_tokens|
         loop do
           case type_of(current)
-            when :tCONSTANT, :tCOLON2, :tCOLON3
+            # Identifiers are allowed because they could be type aliases. Hopefully that doesn't
+            # completely screw things up, since aliases make it virtually impossible to distinguish
+            # untyped keyword arguments from typed ones.
+            when :tIDENTIFIER, :tCONSTANT, :tCOLON2, :tCOLON3
               const_tokens << current
               consume(type_of(current), block)
             when :tFID
               nilable = true
-              const_tokens << [:tCONSTANT, [text_of(current).chomp('?'), pos_of(current).adjust(end_pos: -1)]]
+              const_tokens << [:tCONSTANT, [text_of(current).chomp("?"), pos_of(current).adjust(end_pos: -1)]]
               loc[:question_mark] = pos_of(current).with(begin_pos: pos_of(current).end_pos - 1)
               block.call(const_tokens.last) if block
               consume(:tFID)
@@ -739,15 +824,6 @@ module Myrb
     def fabricate_and_yield(block, tokens)
       tokens.each do |(type, (text, loc))|
         block.call([type, [text, loc || make_range(0, 0)]])
-      end
-    end
-
-    def const_token?(token)
-      case type_of(token)
-        when :tCONSTANT, :tCOLON2, :tCOLON3, :tFID
-          true
-        else
-          false
       end
     end
 

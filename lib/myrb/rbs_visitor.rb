@@ -60,7 +60,11 @@ module Myrb
         return_type = if node.return_type
           visit(node.return_type, level)
         else
-          'void'
+          'untyped'
+        end
+
+        if node.return_type.is_a?(UnionType)
+          return_type = "(#{return_type})"
         end
 
         block_arg = node.args.block_arg
@@ -84,10 +88,11 @@ module Myrb
     end
 
     def visit_scope(node, level)
-      lines = [node.mixins.map      { |kind, const| indent("#{kind} #{visit(const)}", level) }.join("\n")]
-      lines << node.scopes.map      { |scp| visit(scp, level) }.join("\n")
-      lines << node.method_defs.map { |mtd| visit(mtd, level) }.join("\n")
-      lines << node.interfaces.map  { |iface| visit(iface, level) }.join("\n")
+      lines = [node.mixins.map       { |kind, const| indent("#{kind} #{visit(const)}", level) }.join("\n")]
+      lines << node.scopes.map       { |scp| visit(scp, level) }.join("\n")
+      lines << node.method_defs.map  { |mtd| visit(mtd, level) }.join("\n")
+      lines << node.interfaces.map   { |iface| visit(iface, level) }.join("\n")
+      lines << node.type_aliases.map { |ta| visit(ta, level) }.join("\n")
 
       lines.reject(&:empty?).join("\n\n")
     end
@@ -103,14 +108,15 @@ module Myrb
     end
 
     def visit_constant(node, level)
-      node.name
+      node.name.dup
     end
 
     def visit_interface(node, level)
-      lines = node.definition.split("\n")
-      ws = lines[-1].match(/\A\s*/)[0]
-      lines.map! { |line| line.start_with?(ws) ? line[ws.size..-1] : line }
-      indent(lines.join("\n"), level)
+      indent_lines(node.definition.split("\n"))
+    end
+
+    def visit_type_alias(node, level)
+      indent_lines(node.definition.split("\n"), level)
     end
 
     def visit_type(node, level)
@@ -120,8 +126,12 @@ module Myrb
       result
     end
 
-    def visit_proc_type(node, level)
+    def visit_block_type(node, level)
       "{ (#{visit(node.args, level)}) -> #{visit(node.return_type, level)} }"
+    end
+
+    def visit_proc_type(node, level)
+      "^(#{visit(node.args, level)}) -> #{visit(node.return_type, level)}"
     end
 
     def visit_class_of(node, level)
@@ -131,7 +141,9 @@ module Myrb
     end
 
     def visit_union_type(node, level)
-      node.types.map { |t| visit(t, level) }.join(' | ')
+      result = node.types.map { |t| visit(t, level) }.join(' | ')
+      result = "(#{result})?" if node.nilable?
+      result
     end
 
     def visit_nil_type(node, level)
@@ -151,6 +163,13 @@ module Myrb
     end
 
     private
+
+    # maybe move this into AnnotationVisitor?
+    def indent_lines(lines, level)
+      ws = lines[-1].match(/\A\s*/)[0]
+      lines.map! { |line| line.start_with?(ws) ? line[ws.size..-1] : line }
+      indent(lines.join("\n"), level)
+    end
 
     def handle_class_def(node, level)
       (+'').tap do |result|
@@ -187,7 +206,11 @@ module Myrb
       end
 
       unless node.scopes.empty?
-        lines << scopes.map { |scp| visit(scp, level) }.join("\n")
+        lines << node.scopes.map { |scp| visit(scp, level) }.join("\n")
+      end
+
+      unless node.type_aliases.empty?
+        lines << node.type_aliases.map { |ta| visit(ta, level) }.join("\n")
       end
 
       lines << ""

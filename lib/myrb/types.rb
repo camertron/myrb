@@ -49,14 +49,14 @@ module Myrb
     end
 
     def sig
-      const.to_ruby.dup.tap do |result|
+      const.name.dup.tap do |result|
         result << type_args.sig unless type_args.empty?
       end
     end
 
     def inspect(indent = 0)
       return super() if Myrb.debug?
-      const.inspect.tap do |result|
+      const.name.dup.tap do |result|
         result << type_args.inspect unless type_args.empty?
         result << "?" if nilable?
       end
@@ -177,7 +177,7 @@ module Myrb
   end
 
 
-  class ProcType < Annotation
+  class BlockType < Annotation
     attr_reader :loc, :args, :return_type
 
     def initialize(loc, args, return_type)
@@ -224,6 +224,21 @@ module Myrb
 
         result << ' }'
       end
+    end
+
+    def accept(visitor, level)
+      visitor.visit_block_type(self, level)
+    end
+  end
+
+
+  class ProcType
+    attr_reader :loc, :args, :return_type
+
+    def initialize(loc, args, return_type)
+      @loc = loc
+      @args = args
+      @return_type = return_type
     end
 
     def accept(visitor, level)

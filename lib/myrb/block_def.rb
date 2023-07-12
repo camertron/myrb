@@ -7,7 +7,7 @@ module Myrb
     include Singleton
 
     def initialize
-      super(ProcType.new(nil, [], UntypedType.new))
+      super(BlockType.new(nil, [], UntypedType.new))
     end
   end
 end

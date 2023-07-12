@@ -41,7 +41,13 @@ module Myrb
     def visit_interface(node, level)
     end
 
+    def visit_type_alias(node, level)
+    end
+
     def visit_type(node, level)
+    end
+
+    def visit_block_type(node, level)
     end
 
     def visit_proc_type(node, level)

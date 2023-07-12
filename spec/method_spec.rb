@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
+require "spec_helper"
 
-describe 'Methods' do
-  context 'inside classes' do
+describe "Methods" do
+  context "inside classes" do
     before(:each) do
       code(<<~RUBY)
         class StringHelpers
@@ -13,15 +13,15 @@ describe 'Methods' do
       RUBY
     end
 
-    it 'parses the method definition' do
-      mtd = find('StringHelpers#some_method')
+    it "parses the method definition" do
+      mtd = find("StringHelpers#some_method")
       expect(mtd).to_not be_nil
-      expect(mtd).to have_arg('arg')
-      expect(mtd).to return_a('String | nil')
+      expect(mtd).to have_arg("arg")
+      expect(mtd).to return_a("String | nil")
     end
   end
 
-  context 'inside other methods' do
+  context "inside other methods" do
     before(:each) do
       code(<<~RUBY)
         def outer_method
@@ -31,11 +31,11 @@ describe 'Methods' do
       RUBY
     end
 
-    it 'parses the method definition' do
-      inner_mtd = find('#inner_method', find('#outer_method'))
+    it "parses the method definition" do
+      inner_mtd = find("#inner_method", find("#outer_method"))
       expect(inner_mtd).to_not be_nil
-      expect(inner_mtd).to have_arg('arg')
-      expect(inner_mtd).to return_a('Array[Numeric]')
+      expect(inner_mtd).to have_arg("arg")
+      expect(inner_mtd).to return_a("Array[Numeric]")
     end
   end
 end

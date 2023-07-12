@@ -2,18 +2,18 @@
 
 RSpec::Matchers.define :have_type_arguments do |*type_strs|
   match do |object|
-    @kind = 'unknown'
+    @kind = "unknown"
     @type_args = []
 
     case object
       when Myrb::ClassDef
-        @kind = 'class'
+        @kind = "class"
         @type_args = object.type.type_args
       when Myrb::Annotation
-        @kind = 'annotation'
+        @kind = "annotation"
         @type_args = object.type_args
       when Myrb::MethodDef
-        @kind = 'method'
+        @kind = "method"
         # Not yet implemented
     end
 

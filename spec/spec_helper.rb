@@ -1,18 +1,18 @@
 $:.push(__dir__)
-$:.push(File.join(__dir__, 'helpers'))
+$:.push(File.join(__dir__, "helpers"))
 
-require 'rspec'
-require 'matchers/have_arg'
-require 'matchers/have_default_value'
-require 'matchers/have_type'
-require 'matchers/have_type_arguments'
-require 'matchers/match_selector'
-require 'matchers/return_a'
+require "rspec"
+require "matchers/have_arg"
+require "matchers/have_default_value"
+require "matchers/have_type"
+require "matchers/have_type_arguments"
+require "matchers/match_selector"
+require "matchers/return_a"
 
-require 'parser/current'
+require "parser/current"
 
-require 'myrb'
-require 'myrb/selector'
+require "myrb"
+require "myrb/selector"
 
 module Myrb
   module SpecHelpers

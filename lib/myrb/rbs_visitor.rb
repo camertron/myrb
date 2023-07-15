@@ -112,7 +112,7 @@ module Myrb
     end
 
     def visit_interface(node, level)
-      indent_lines(node.definition.split("\n"))
+      indent_lines(node.definition.split("\n"), level)
     end
 
     def visit_type_alias(node, level)

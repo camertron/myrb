@@ -170,5 +170,22 @@ module Myrb
     def join_ranges(begin_range, end_range)
       begin_range.with(end_pos: end_range.end_pos)
     end
+
+    def remove(range)
+      replace(
+        range,
+        range.source.gsub(/[^\r\n\t]/, " ")
+      )
+    end
+
+    def replace(range, replacement)
+      # not much we can do if the replacement is longer than the original
+      return super if replacement.size >= range.size
+
+      super(
+        range,
+        replacement.rjust(range.size, " ")
+      )
+    end
   end
 end

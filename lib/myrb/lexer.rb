@@ -27,6 +27,7 @@ module Myrb
       @top_level_scope = @context[:annotations]
       @context[:annotation_scope_stack] ||= [@top_level_scope]
       @scope_stack = @context[:annotation_scope_stack]
+      @captured_tokens = []
     end
 
     def reset_to(pos)
@@ -147,9 +148,72 @@ module Myrb
             block.call(ivar_token) if block
             consume(type_of(current), block)
           end
+
+        when :tCONSTANT
+          if (const_assgn = maybe_handle_const_assgn(block))
+            current_scope.const_assgns << const_assgn
+          end
+
         else
           consume(type_of(current), block)
       end
+    end
+
+    def maybe_handle_const_assgn(block)
+      start_token = current
+      tokens = [current]
+      const_tokens = [current]
+
+      consume(:tCONSTANT)
+
+      loop do
+        case type_of(current)
+          when :tCONSTANT, :tCOLON2
+            const_tokens << current
+            tokens << current
+            consume(type_of(current))
+          else
+            break
+        end
+      end
+
+      loc = {}
+      type = nil
+
+      if type_of(current) == :tCOLON
+        loc[:colon] = pos_of(current)
+        tokens << current
+        consume(:tCOLON)
+
+        type_tokens = capture do
+          # This will raise if we're inside a ternary or some other unexpected construct.
+          # Generally if a type doesn't follow the tCOLON i.e. handle_types blows up, we
+          # should assume something is wrong by setting type = nil, which will cause the
+          # code below to yield all the tokens we consumed to the parser.
+          type = handle_types rescue nil
+        end
+
+        tokens.concat(type_tokens)
+      else
+        type = UntypedType.new
+      end
+
+      if !type || type_of(current) != :tEQL
+        tokens.each { |token| block.call(token) }
+        return
+      end
+
+      const_tokens.each { |token| block.call(token) }
+      consume(:tEQL, block)
+
+      # This isn't quite right, but it's going to be very hard to extract the assigned value here,
+      # as ExpressionBoundary doesn't seem to work :(
+      loc[:expression] = pos_of(start_token).with(end_pos: pos_of(current).end_pos)
+      loc[:constant] = pos_of(const_tokens.first).with(end_pos: pos_of(const_tokens.last).end_pos)
+
+      name = const_tokens.map { |token| text_of(token) }.join("::")
+
+      ConstAssgn.new(name, type, loc)
     end
 
     def maybe_handle_type_alias(block)
@@ -827,16 +891,30 @@ module Myrb
       end
     end
 
+    def capture(&block)
+      @capturing = true
+      yield
+      @capturing = false
+      @captured_tokens.dup.tap do
+        @captured_tokens.clear
+      end
+    end
+
     def consume(types, block = nil)
       types = Array(types)
 
       if !types.include?(type_of(current))
         raise UnexpectedTokenError,
           "expected #{to_list(types.map(&:to_s))}, got #{type_of(current)} "\
-          "on line #{pos_of(current).line}"
+          "at #{@source_buffer.name}:#{pos_of(current).line}:#{pos_of(current).column}"
       end
 
-      block.call(current) if block
+      if @capturing
+        @captured_tokens << current
+      else
+        block.call(current) if block
+      end
+
       @prev = current
 
       end_pos = pos_of(current).end_pos

@@ -14,6 +14,8 @@ module Foo
   end
 
   class TestComponent[K, V]
+    CONST: String = "foo"
+
     @title: Array[Numeric]
     @thing: Hash[K, String | Numeric]
 

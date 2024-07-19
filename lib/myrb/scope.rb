@@ -2,7 +2,7 @@
 
 module Myrb
   class Scope < Annotation
-    attr_reader :type, :method_defs, :scopes, :attrs, :ivars, :mixins, :interfaces, :type_aliases
+    attr_reader :type, :method_defs, :scopes, :attrs, :ivars, :mixins, :interfaces, :type_aliases, :const_assgns
 
     def initialize(type)
       @type = type
@@ -13,6 +13,7 @@ module Myrb
       @mixins = []
       @interfaces = []
       @type_aliases = []
+      @const_assgns = []
     end
 
     def to_rbi(level)

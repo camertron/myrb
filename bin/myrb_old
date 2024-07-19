@@ -1,0 +1,26 @@
+#! /usr/bin/env ruby
+
+$:.push(File.expand_path('./lib'))
+
+require "myrb"
+require "steep"
+
+class MyrbCLI
+  class << self
+    def run(argv)
+      if argv.first == "check"
+        check
+      end
+    end
+
+    private
+
+    def check
+      Myrb::Drivers::Check.new(stdout: STDOUT, stderr: STDERR).run
+    end
+  end
+end
+
+Dir.chdir("/Users/camertron/workspace/camertron/ohey") do
+  MyrbCLI.run(ARGV)
+end

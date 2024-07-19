@@ -1,11 +1,12 @@
 #! /usr/bin/env ruby
 
-$:.push(File.expand_path('./lib'))
+$:.push(File.expand_path("./lib"))
 
-require 'pathname'
-require 'optparse'
-require 'fileutils'
-require 'myrb'
+require "pathname"
+require "optparse"
+require "fileutils"
+require "myrb"
+require "json"
 
 class MyrbCLI
   def self.parse(argv)
@@ -35,7 +36,7 @@ class MyrbCLI
   end
 
   def self.oneline(str)
-    str.split("\n").join(' ')
+    str.split("\n").join(" ")
   end
 
   def initialize(options)
@@ -60,10 +61,18 @@ end
 cli = MyrbCLI.parse(ARGV)
 cli.validate
 
-cli.each_file do |file|
-  source_path = file.write_rewritten_source
-  puts "Wrote #{source_path}"
+paths = cli.each_file.map do |file|
+  rb_path = file.write_rewritten_source
+  # puts "Wrote #{rb_path}"
 
   rbs_path = file.write_rbs
-  puts "Wrote #{rbs_path}"
+  # puts "Wrote #{rbs_path}"
+
+  {
+    source_path: file.path,
+    rb_path: rb_path,
+    rbs_path: rbs_path
+  }
 end
+
+puts paths.to_json

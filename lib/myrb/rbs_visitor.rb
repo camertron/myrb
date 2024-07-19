@@ -93,6 +93,7 @@ module Myrb
       lines << node.method_defs.map  { |mtd| visit(mtd, level) }.join("\n")
       lines << node.interfaces.map   { |iface| visit(iface, level) }.join("\n")
       lines << node.type_aliases.map { |ta| visit(ta, level) }.join("\n")
+      lines << node.const_assgns.map { |ca| visit(ca, level) }.join("\n")
 
       lines.reject(&:empty?).join("\n\n")
     end
@@ -109,6 +110,10 @@ module Myrb
 
     def visit_constant(node, level)
       node.name.dup
+    end
+
+    def visit_const_assgn(node, level)
+      indent("#{node.const}: #{visit(node.type, level)}", level)
     end
 
     def visit_interface(node, level)
@@ -211,6 +216,10 @@ module Myrb
 
       unless node.type_aliases.empty?
         lines << node.type_aliases.map { |ta| visit(ta, level) }.join("\n")
+      end
+
+      unless node.const_assgns.empty?
+        lines << node.const_assgns.map { |ca| visit(ca, level) }.join("\n")
       end
 
       lines << ""

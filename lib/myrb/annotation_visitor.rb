@@ -38,6 +38,9 @@ module Myrb
     def visit_constant(node, level)
     end
 
+    def visit_const_assgn(node, level)
+    end
+
     def visit_interface(node, level)
     end
 

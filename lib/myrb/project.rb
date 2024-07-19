@@ -36,7 +36,7 @@ module Myrb
           cache.store(file.path)
         end
 
-        yield(idx) if block
+        yield(idx, file) if block
       end
     end
 

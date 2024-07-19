@@ -84,6 +84,7 @@ module Myrb
       handle_ivars(module_def)
       handle_interfaces(module_def)
       handle_type_aliases(module_def)
+      handle_const_assgns(module_def)
 
       if module_def.has_singleton_class?
         handle_class_def(module_def.singleton_class_def)
@@ -164,6 +165,14 @@ module Myrb
     def handle_type_aliases(scope)
       scope.type_aliases.each do |type_alias|
         remove(smart_strip(type_alias.loc[:expression]))
+      end
+    end
+
+    def handle_const_assgns(scope)
+      scope.const_assgns.each do |const_assgn|
+        if (colon_loc = const_assgn.loc[:colon])
+          remove(colon_loc.with(end_pos: const_assgn.type.loc[:expression].end_pos))
+        end
       end
     end
 
